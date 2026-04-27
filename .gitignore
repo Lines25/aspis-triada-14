@@ -322,3 +322,6 @@ triad-signing-keys/
 
 # Triad: BenchmarkDotNet drops results in the repo root when Content.Benchmarks runs locally
 BenchmarkDotNet.Artifacts/
+
+# For some engine tests
+RobustToolbox
