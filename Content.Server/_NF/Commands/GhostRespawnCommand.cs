@@ -1,27 +1,23 @@
 using Content.Server._Corvax.Respawn;
 using Content.Server.GameTicking;
-using Content.Server.Mind;
-using Content.Shared.Administration;
 using Content.Shared.CCVar;
 using Content.Shared.Ghost;
-using Content.Shared.Mind;
 using Content.Shared._NF.CCVar;
-using Content.Shared.Roles;
-using Robust.Server.Player;
+using Content.Shared.Administration; // Aspis
 using Robust.Shared.Configuration;
 using Robust.Shared.Console;
-using Robust.Shared.Player;
 using Robust.Shared.Timing;
+using Content.Server.Respawn; // Aspis
 
 namespace Content.Server._NF.Commands;
 
 [AnyCommand()]
 public sealed partial class GhostRespawnCommand : IConsoleCommand
 {
-    [Dependency] private IGameTiming _gameTiming = default!;
-    [Dependency] private IEntityManager _entityManager = default!;
-    [Dependency] private IConfigurationManager _configurationManager = default!;
-    [Dependency] private IEntitySystemManager _entity = default!;
+    [Dependency] private readonly IGameTiming _gameTiming = default!;
+    [Dependency] private readonly IEntityManager _entityManager = default!;
+    [Dependency] private readonly IConfigurationManager _configurationManager = default!;
+    [Dependency] private readonly IEntitySystemManager _entity = default!;
 
     public string Command => "ghostrespawn";
     public string Description => "Allows the player to return to the lobby if they've been dead long enough, allowing re-entering the round AS ANOTHER CHARACTER.";
@@ -65,7 +61,7 @@ public sealed partial class GhostRespawnCommand : IConsoleCommand
             }
         }
 
-        var gameTicker = _entityManager.EntitySysManager.GetEntitySystem<GameTicker>();
-        gameTicker.Respawn(shell.Player);
+        var confirmSystem = _entity.GetEntitySystem<RespawnConfirmSystem>(); // Aspis
+        confirmSystem.RequestRespawn(shell.Player);
     }
 }
