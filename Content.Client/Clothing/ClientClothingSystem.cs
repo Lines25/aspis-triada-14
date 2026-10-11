@@ -14,6 +14,7 @@ using Content.Shared.Item;
 using Robust.Client.GameObjects;
 using Robust.Client.Graphics;
 using Robust.Client.ResourceManagement;
+using Robust.Shared.Prototypes; // Aspis
 using Robust.Shared.Serialization.Manager;
 using Robust.Shared.Serialization.TypeSerializers.Implementations;
 using Robust.Shared.Utility;
@@ -24,6 +25,7 @@ namespace Content.Client.Clothing;
 public sealed partial class ClientClothingSystem : ClothingSystem
 {
     public const string Jumpsuit = "jumpsuit";
+    private const string Jumpskirt = "jumpskirt"; // Aspis
 
     /// <summary>
     /// This is a shitty hotfix written by me (Paul) to save me from renaming all files.
@@ -53,6 +55,7 @@ public sealed partial class ClientClothingSystem : ClothingSystem
     [Dependency] private InventorySystem _inventorySystem = default!;
     [Dependency] private DisplacementMapSystem _displacement = default!;
     [Dependency] private SpriteSystem _sprite = default!;
+    [Dependency] private IPrototypeManager _prototypeManager = default!; // Aspis
 
     public override void Initialize()
     {
@@ -104,17 +107,25 @@ public sealed partial class ClientClothingSystem : ClothingSystem
         if (!TryComp(args.Equipee, out InventoryComponent? inventory))
             return;
 
+        var speciesId = inventory.SpeciesId ?? CompOrNull<HumanoidAppearanceComponent>(args.Equipee)?.Species.ToString(); // Aspis
         List<PrototypeLayerData>? layers = null;
 
-        // first attempt to get species specific data.
-        if (inventory.SpeciesId != null)
-            item.ClothingVisuals.TryGetValue($"{args.Slot}-{inventory.SpeciesId}", out layers);
+        // Aspis start: clothingSpeciesFallback
+        if (speciesId != null)
+        {
+            foreach (var species in ClothingSpeciesHelper.GetClothingSpecies(_prototypeManager, speciesId, args.Slot))
+            {
+                if (item.ClothingVisuals.TryGetValue($"{args.Slot}-{species}", out layers))
+                    break;
+            }
+        }
+        // Aspis end
 
         // if that returned nothing, attempt to find generic data
         if (layers == null && !item.ClothingVisuals.TryGetValue(args.Slot, out layers))
         {
             // No generic data either. Attempt to generate defaults from the item's RSI & item-prefixes
-            if (!TryGetDefaultVisuals(uid, item, args.Slot, inventory.SpeciesId, out layers))
+            if (!TryGetDefaultVisuals(uid, item, args.Slot, speciesId, out layers)) // Aspis edit: (inventory.SpeciesId > speciesId)
                 return;
         }
 
@@ -169,10 +180,21 @@ public sealed partial class ClientClothingSystem : ClothingSystem
         if (clothing.EquippedState != null)
             state = $"{clothing.EquippedState}";
 
-        // species specific
-        if (speciesId != null && rsi.TryGetState($"{state}-{speciesId}", out _))
-            state = $"{state}-{speciesId}";
-        else if (!rsi.TryGetState(state, out _))
+        // Aspis start: clothingSpeciesFallback
+        var foundState = false;
+        if (speciesId != null)
+        {
+            foreach (var species in ClothingSpeciesHelper.GetClothingSpecies(_prototypeManager, speciesId, slot))
+            {
+                if (!rsi.TryGetState($"{state}-{species}", out _))
+                    continue;
+                state = $"{state}-{species}";
+                foundState = true;
+                break;
+            }
+        }
+        if (!foundState && !rsi.TryGetState(state, out _))
+        // Aspis end
             return false;
 
         var layer = new PrototypeLayerData();
@@ -182,6 +204,14 @@ public sealed partial class ClientClothingSystem : ClothingSystem
 
         return true;
     }
+
+    // Aspis start: clothingSpeciesFallback
+    private bool IsJumpskirt(EntityUid equipment)
+    {
+        return TryComp<MetaDataComponent>(equipment, out var metadata)
+               && metadata.EntityPrototype?.ID.Contains("Jumpskirt", StringComparison.OrdinalIgnoreCase) == true;
+    }
+    // Aspis end
 
     private void OnVisualsChanged(EntityUid uid, InventoryComponent component, VisualsChangedEvent args)
     {
@@ -271,24 +301,27 @@ public sealed partial class ClientClothingSystem : ClothingSystem
         // bookmark to determine where in the list of layers we should insert the clothing layers.
         bool slotLayerExists = _sprite.LayerMapTryGet((equipee, sprite), slot, out var index, false);
 
-        // Select displacement maps
-        var displacementData = inventory.Displacements.GetValueOrDefault(slot); //Default unsexed map
+        // Aspis start: clothingSpeciesFallback
+        var hasJumpskirtDisplacement = inventory.Displacements.GetValueOrDefault(Jumpskirt) != null
+                                       || inventory.MaleDisplacements.GetValueOrDefault(Jumpskirt) != null
+                                       || inventory.FemaleDisplacements.GetValueOrDefault(Jumpskirt) != null;
+        var displacementSlot = slot == Jumpsuit && IsJumpskirt(equipment) && hasJumpskirtDisplacement
+            ? Jumpskirt
+            : slot;
+        var displacements = inventory.Displacements;
 
         var equipeeSex = CompOrNull<HumanoidAppearanceComponent>(equipee)?.Sex;
-        if (equipeeSex != null)
+        if (equipeeSex == Sex.Male && inventory.MaleDisplacements.Count > 0)
+            displacements = inventory.MaleDisplacements;
+        else if (equipeeSex == Sex.Female && inventory.FemaleDisplacements.Count > 0)
+            displacements = inventory.FemaleDisplacements;
+
+        var displacementData = displacements.GetValueOrDefault(displacementSlot);
+        if (displacementData == null && displacementSlot == Jumpskirt)
         {
-            switch (equipeeSex)
-            {
-                case Sex.Male:
-                    if (inventory.MaleDisplacements.Count > 0)
-                        displacementData = inventory.MaleDisplacements.GetValueOrDefault(slot);
-                    break;
-                case Sex.Female:
-                    if (inventory.FemaleDisplacements.Count > 0)
-                        displacementData = inventory.FemaleDisplacements.GetValueOrDefault(slot);
-                    break;
-            }
+            displacementData = displacements.GetValueOrDefault(Jumpsuit);
         }
+        // Aspis end
 
         // add the new layers
         foreach (var (key, layerData) in ev.Layers)

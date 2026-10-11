@@ -3,12 +3,14 @@ using Content.Client.Clothing;
 using Content.Client.Items.Systems;
 using Content.Shared.Clothing;
 using Content.Shared.Hands;
+using Content.Shared.Humanoid; // Aspis
 using Content.Shared.Inventory;
 using Content.Shared.Item;
 using Content.Shared.Light.Components;
 using Content.Shared.Toggleable;
 using Robust.Client.GameObjects;
 using Robust.Shared.Utility;
+using Robust.Shared.Prototypes; // Aspis
 
 namespace Content.Client.Toggleable;
 
@@ -22,6 +24,7 @@ public sealed partial class ToggleableVisualsSystem : VisualizerSystem<Toggleabl
 {
     [Dependency] private SharedItemSystem _item = default!;
     [Dependency] private SharedPointLightSystem _pointLight = default!;
+    [Dependency] private IPrototypeManager _prototypeManager = default!; // Aspis
 
     public override void Initialize()
     {
@@ -79,11 +82,19 @@ public sealed partial class ToggleableVisualsSystem : VisualizerSystem<Toggleabl
 
         if (!TryComp(args.Equipee, out InventoryComponent? inventory))
             return;
+        var speciesId = inventory.SpeciesId ?? CompOrNull<HumanoidAppearanceComponent>(args.Equipee)?.Species.ToString(); // Aspis: clothingSpeciesFallback
         List<PrototypeLayerData>? layers = null;
 
-        // attempt to get species specific data
-        if (inventory.SpeciesId != null)
-            component.ClothingVisuals.TryGetValue($"{args.Slot}-{inventory.SpeciesId}", out layers);
+        // Aspis start: clothingSpeciesFallback
+        if (speciesId != null)
+        {
+            foreach (var species in ClothingSpeciesHelper.GetClothingSpecies(_prototypeManager, speciesId, args.Slot))
+            {
+                if (component.ClothingVisuals.TryGetValue($"{args.Slot}-{species}", out layers))
+                    break;
+            }
+        }
+        // Aspis end
 
         // No species specific data.  Try to default to generic data.
         if (layers == null && !component.ClothingVisuals.TryGetValue(args.Slot, out layers))
