@@ -4,6 +4,9 @@
   roundStart: true
   prototype: MobVulpkanin
   sprites: MobVulpkaninSprites
+  clothingSpeciesFallback: # Aspis - clothing fallback
+    outerClothing: Reptilian
+    shoes: Reptilian
   defaultSkinTone: "#985629"
   markingLimits: MobVulpkaninMarkingLimits
   dollPrototype: MobVulpkaninDummy
@@ -78,83 +81,83 @@
 - type: humanoidBaseSprite
   id: MobVulpkaninHead
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: head_m
 
 - type: humanoidBaseSprite
   id: MobVulpkaninHeadMale
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: head_m
 
 - type: humanoidBaseSprite
   id: MobVulpkaninHeadFemale
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: head_f
 
 - type: humanoidBaseSprite
   id: MobVulpkaninTorso
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: torso_m
 
 - type: humanoidBaseSprite
   id: MobVulpkaninTorsoMale
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: torso_m
 
 - type: humanoidBaseSprite
   id: MobVulpkaninTorsoFemale
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: torso_f
 
 - type: humanoidBaseSprite
   id: MobVulpkaninLLeg
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: l_leg
 
 - type: humanoidBaseSprite
   id: MobVulpkaninLHand
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: l_hand
 
 - type: humanoidBaseSprite
   id: MobVulpkaninLArm
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: l_arm
 
 - type: humanoidBaseSprite
   id: MobVulpkaninLFoot
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: l_foot
 
 - type: humanoidBaseSprite
   id: MobVulpkaninRLeg
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: r_leg
 
 - type: humanoidBaseSprite
   id: MobVulpkaninRHand
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: r_hand
 
 - type: humanoidBaseSprite
   id: MobVulpkaninRArm
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: r_arm
 
 - type: humanoidBaseSprite
   id: MobVulpkaninRFoot
   baseSprite:
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: r_foot

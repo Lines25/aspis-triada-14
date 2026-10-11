@@ -1,0 +1,35 @@
+# Крики від ЕЕ
+- type: soundCollection
+  id: AspisVulpkaninScreams
+  files:
+  - /Audio/_Aspis/Voice/Vulpkanin/vulpscream1.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/vulpscream2.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/vulpscream3.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/vulpscream4.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/vulpscream5.ogg
+
+# Інше
+- type: soundCollection
+  id: AspisVulpkaninGekkers
+  files:
+  - /Audio/_Aspis/Voice/Vulpkanin/fox_gekker1.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/fox_gekker2.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/fox_gekker3.ogg
+
+- type: soundCollection
+  id: AspisVulpkaninCry
+  files:
+  - /Audio/_Aspis/Voice/Vulpkanin/fox_cry1.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/fox_cry2.ogg
+
+- type: soundCollection
+  id: AspisVulpkaninSneeze
+  files:
+  - /Audio/_Aspis/Voice/Vulpkanin/fox_sneeze.ogg
+
+- type: soundCollection
+  id: AspisVulpkaninSniff
+  files:
+  - /Audio/_Aspis/Voice/Vulpkanin/sniffing1.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/sniffing2.ogg
+  - /Audio/_Aspis/Voice/Vulpkanin/sniffing3.ogg

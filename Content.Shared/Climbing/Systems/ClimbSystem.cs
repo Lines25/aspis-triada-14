@@ -392,6 +392,18 @@ public sealed partial class ClimbSystem : VirtualController
         StopClimb(uid, component);
     }
 
+    /// <summary>
+    /// Aspis: Restore the normal fixtures when a Vulpkanin jump leaves a climbable surface.
+    /// </summary>
+    public void StopClimbing(EntityUid uid)
+    {
+        if (!TryComp<ClimbingComponent>(uid, out var climbing)
+            || (!climbing.IsClimbing && climbing.NextTransition == null && climbing.DisabledFixtureMasks.Count == 0))
+            return;
+
+        StopClimb(uid, climbing);
+    }
+
     private void StopClimb(EntityUid uid, ClimbingComponent? climbing = null, FixturesComponent? fixtures = null)
     {
         if (!Resolve(uid, ref climbing, ref fixtures, false))

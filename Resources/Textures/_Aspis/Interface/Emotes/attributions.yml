@@ -1,0 +1,6 @@
+﻿# SPDX-License-Identifier: AGPL-3.0-or-later
+
+- files: ["awoo.png", "bark.png", "snarl.png", "whine.png"]
+  license: "CC-BY-SA-3.0"
+  copyright: "Made by BombasterDS"
+  source: "https://github.com/BombasterDS"
