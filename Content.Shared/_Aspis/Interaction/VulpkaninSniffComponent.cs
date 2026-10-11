@@ -1,6 +1,6 @@
 using Robust.Shared.Audio;
 
-namespace Content.Shared._Aspis.Movement;
+namespace Content.Shared._Aspis.Interaction;
 
 [RegisterComponent]
 public sealed partial class VulpkaninSniffComponent : Component

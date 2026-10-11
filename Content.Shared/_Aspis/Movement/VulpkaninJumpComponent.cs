@@ -19,22 +19,16 @@ public sealed partial class VulpkaninJumpComponent : Component
     public float JumpSpeed = 7f;
 
     [DataField, AutoNetworkedField]
-    public float JumpRange = 2.5f;
+    public float JumpRange = 2f;
 
     [DataField, AutoNetworkedField]
     public float StaminaCost = 50f;
-
-    [DataField, AutoNetworkedField]
-    public float PushOffImpulseMultiplier = 1f;
 
     [ViewVariables]
     public EntityUid? JumpActionEntity;
 
     [AutoNetworkedField]
     public bool Jumping;
-
-    [AutoNetworkedField]
-    public bool IgnoreWalls;
 
     [AutoNetworkedField]
     public VulpkaninJumpEndState PendingEnd;

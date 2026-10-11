@@ -94,6 +94,7 @@
   id: Bark
   name: delta-chat-emote-name-bark
   category: Vocal
+  icon: _Aspis/Interface/Emotes/bark.png # Aspis: Port Goob Vulpkanin emote icons
   available: false
   whitelist:
     components:
@@ -112,6 +113,7 @@
   id: Snarl
   name: delta-chat-emote-name-snarl
   category: Vocal
+  icon: _Aspis/Interface/Emotes/snarl.png # Aspis: Port Goob Vulpkanin emote icons
   available: false
   whitelist:
     components:
@@ -130,6 +132,7 @@
   id: Whimper # Starlight / Monolith: Renamed to whimper
   name: delta-chat-emote-name-whine
   category: Vocal
+  icon: _Aspis/Interface/Emotes/whine.png # Aspis: Port Goob Vulpkanin emote icons
   available: false
   whitelist:
     components:
@@ -166,6 +169,7 @@
   id: Awoo
   name: delta-chat-emote-name-awoo
   category: Vocal
+  icon: _Aspis/Interface/Emotes/awoo.png # Aspis: Port Goob Vulpkanin emote icons
   available: false
   whitelist:
     components:

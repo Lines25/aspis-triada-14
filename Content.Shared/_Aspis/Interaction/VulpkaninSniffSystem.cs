@@ -2,7 +2,7 @@ using Content.Shared.Popups;
 using Content.Shared.Verbs;
 using Robust.Shared.Audio.Systems;
 
-namespace Content.Shared._Aspis.Movement;
+namespace Content.Shared._Aspis.Interaction;
 
 public sealed class VulpkaninSniffSystem : EntitySystem
 {

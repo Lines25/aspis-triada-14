@@ -1,0 +1,13 @@
+- type: trait
+  id: RhotacismAccent
+  name: trait-rhotacism-accent-name
+  description: trait-rhotacism-accent-desc
+  category: Accents
+  cost: 0
+  conditions:
+  - !type:IsSpeciesCondition
+    species: Vulpkanin
+  effects:
+  - !type:AddCompsEffect
+    components:
+    - type: RhotacismAccent

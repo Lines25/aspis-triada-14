@@ -1,12 +1,10 @@
 using System.Linq;
 using System.Numerics;
-using Content.Shared._Crescent.ShipShields;
 using Content.Shared.Actions;
 using Content.Shared.Climbing.Systems;
 using Content.Shared.Damage.Systems;
 using Content.Shared.Gravity;
 using Content.Shared.Maps;
-using Content.Shared.Mobs.Components;
 using Content.Shared.Placeable;
 using Content.Shared.Physics;
 using Content.Shared.Standing;
@@ -25,7 +23,6 @@ namespace Content.Shared._Aspis.Movement;
 public sealed class VulpkaninJumpSystem : EntitySystem
 {
     private static readonly Vector2[] WallDirections = { Vector2.UnitX, -Vector2.UnitX, Vector2.UnitY, -Vector2.UnitY };
-
     [Dependency] private readonly SharedActionsSystem _actions = default!;
     [Dependency] private readonly ClimbSystem _climbing = default!;
     [Dependency] private readonly SharedGravitySystem _gravity = default!;
@@ -91,18 +88,14 @@ public sealed class VulpkaninJumpSystem : EntitySystem
             || HasComp<ThrownItemComponent>(ent))
             return;
 
-        var weightless = _gravity.IsWeightless(ent);
-        IEnumerable<EntityUid>? nearby = null;
-        if (weightless)
-        {
-            if (Transform(ent).GridUid is { } grid && HasComp<ShipShieldedComponent>(grid))
-                return;
+        if (!TryComp<PhysicsComponent>(ent, out var physics)
+            || physics == null
+            || (physics.BodyType & (BodyType.Dynamic | BodyType.KinematicController)) == 0)
+            return;
 
-            nearby = _lookup.GetEntitiesInRange(ent, 1.25f, LookupFlags.Dynamic | LookupFlags.Static | LookupFlags.Sundries);
-            if (!IsNextToWall(Transform(ent).Coordinates)
-                && !nearby.Any(entity => entity != ent.Owner && !HasComp<ShipShieldComponent>(entity)))
-                return;
-        }
+        var weightless = _gravity.IsWeightless(ent);
+        if (weightless && !IsNextToWall(Transform(ent).Coordinates))
+            return;
 
         var target = ClampTarget(ent, args.Target, ent.Comp.JumpRange);
         var origin = _transform.GetMapCoordinates(ent);
@@ -110,10 +103,7 @@ public sealed class VulpkaninJumpSystem : EntitySystem
         var direction = destination.Position - origin.Position;
         if (destination.MapId != origin.MapId
             || ent.Comp.JumpSpeed <= 0
-            || direction.LengthSquared() < 0.001f
-            || !TryComp<PhysicsComponent>(ent, out var physics)
-            || physics == null
-            || (physics.BodyType & (BodyType.Dynamic | BodyType.KinematicController)) == 0)
+            || direction.LengthSquared() < 0.001f)
             return;
 
         if (!_stamina.TryTakeStamina(ent, ent.Comp.StaminaCost))
@@ -122,7 +112,6 @@ public sealed class VulpkaninJumpSystem : EntitySystem
         _climbing.StopClimbing(ent);
 
         ent.Comp.Jumping = true;
-        ent.Comp.IgnoreWalls = weightless;
         Dirty(ent);
         _physics.RegenerateContacts((ent.Owner, physics));
         _throwing.TryThrow(ent, target, ent.Comp.JumpSpeed, ent.Owner,
@@ -132,9 +121,6 @@ public sealed class VulpkaninJumpSystem : EntitySystem
             EndJump(ent);
             return;
         }
-
-        if (nearby != null)
-            PushOffNearbyObjects(ent, direction, nearby);
 
         _audio.PlayPredicted(ent.Comp.JumpSound, ent, ent);
         args.Handled = true;
@@ -155,22 +141,6 @@ public sealed class VulpkaninJumpSystem : EntitySystem
         return _transform.ToCoordinates(new MapCoordinates(clamped, origin.MapId));
     }
 
-    private void PushOffNearbyObjects(Entity<VulpkaninJumpComponent> jumper, Vector2 direction, IEnumerable<EntityUid> nearby)
-    {
-        direction = Vector2.Normalize(direction);
-        foreach (var entity in nearby)
-        {
-            if (entity == jumper.Owner || HasComp<ShipShieldComponent>(entity) || HasComp<MobStateComponent>(entity)
-                || !TryComp<PhysicsComponent>(entity, out PhysicsComponent? physics) || physics == null
-                || physics.BodyType != BodyType.Dynamic || Transform(entity).Anchored)
-                continue;
-
-            _physics.ApplyLinearImpulse(entity,
-                -direction * physics.Mass * jumper.Comp.JumpSpeed * jumper.Comp.PushOffImpulseMultiplier,
-                body: physics);
-        }
-    }
-
     private bool IsNextToWall(EntityCoordinates coordinates)
     {
         foreach (var direction in WallDirections)
@@ -188,9 +158,8 @@ public sealed class VulpkaninJumpSystem : EntitySystem
         if (!ent.Comp.Jumping)
             return;
 
-        if ((ent.Comp.IgnoreWalls && (args.OtherFixture.CollisionLayer & (int) CollisionGroup.Impassable) != 0)
-            || (HasComp<PlaceableSurfaceComponent>(args.OtherEntity)
-                && (args.OtherFixture.CollisionLayer & (int) CollisionGroup.TableLayer) != 0))
+        if (HasComp<PlaceableSurfaceComponent>(args.OtherEntity)
+            && (args.OtherFixture.CollisionLayer & (int) CollisionGroup.TableLayer) != 0)
             args.Cancelled = true;
     }
 
@@ -225,7 +194,6 @@ public sealed class VulpkaninJumpSystem : EntitySystem
             endState = VulpkaninJumpEndState.Table;
 
         ent.Comp.Jumping = false;
-        ent.Comp.IgnoreWalls = false;
         ent.Comp.PendingEnd = endState;
         Dirty(ent);
     }
@@ -256,11 +224,10 @@ public sealed class VulpkaninJumpSystem : EntitySystem
 
     private void EndJump(Entity<VulpkaninJumpComponent> ent)
     {
-        if (!ent.Comp.Jumping && !ent.Comp.IgnoreWalls && ent.Comp.PendingEnd == VulpkaninJumpEndState.None)
+        if (!ent.Comp.Jumping && ent.Comp.PendingEnd == VulpkaninJumpEndState.None)
             return;
 
         ent.Comp.Jumping = false;
-        ent.Comp.IgnoreWalls = false;
         ent.Comp.PendingEnd = VulpkaninJumpEndState.None;
         Dirty(ent);
     }

@@ -15,9 +15,43 @@
   - type: Carriable # Carrying system from nyanotrasen.
   - type: Inventory # Allows vulps to wear properly shaped helmets
     speciesId: vulpkanin
+    # Aspis start: vulps resprite
+    femaleDisplacements:
+      jumpsuit:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: jumpsuit-female
+      jumpskirt:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: jumpskirt-female
+      shoes:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: shoes
+    displacements:
+      jumpsuit:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: jumpsuit
+      jumpskirt:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: jumpskirt
+      shoes:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: shoes
+    # Aspis end
   - type: Thirst
   - type: Icon
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
     state: full
   - type: Body
     prototype: Vulpkanin
@@ -26,6 +60,7 @@
     speechSounds: Vulpkanin
     speechVerb: Vulpkanin
     allowedEmotes: ['Bark', 'Snarl', 'Whine', 'Howl', 'Awoo', 'Growl', 'Yip', 'Whimper'] # Starlight / Monolith: Add yip, whine; rename old whine to whimper
+  - type: Wagging # Aspis tweak
   - type: LanguageKnowledge # Einstein Engines - Languages
     speaks:
     - TauCetiBasic
@@ -50,9 +85,7 @@
       - map: [ "enum.HumanoidVisualLayers.UndergarmentBottom" ] # Triad - Underwear.
       - map: [ "enum.HumanoidVisualLayers.UndergarmentTop" ] # Triad - Underwear.
       - shader: StencilClear
-        sprite: Mobs/Species/Human/parts.rsi #PJB on stencil clear being on the left leg: "...this is 'fine'" -https://github.com/space-wizards/space-station-14/pull/12217#issuecomment-1291677115
-        # its fine, but its still very stupid that it has to be done like this instead of allowing sprites to just directly insert a stencil clear.
-        # sprite refactor when
+        sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
         state: l_leg
       - shader: StencilMask
         map: [ "enum.HumanoidVisualLayers.StencilMask" ]
@@ -78,13 +111,13 @@
       - map: [ "eyes" ]
       - map: [ "belt" ]
       - map: [ "back" ]
-      - map: [ "enum.HumanoidVisualLayers.TailOversuit" ] # DEN
       - map: [ "neck" ]
       - map: [ "enum.HumanoidVisualLayers.FacialHair" ]
       - map: [ "enum.HumanoidVisualLayers.Hair" ]
       - map: [ "enum.HumanoidVisualLayers.HeadSide" ]
       - map: [ "enum.HumanoidVisualLayers.HeadTop" ]
       - map: [ "enum.HumanoidVisualLayers.Tail" ]
+      - map: [ "enum.HumanoidVisualLayers.TailOversuit" ] # DEN
       - map: [ "mask" ]
       - map: [ "head" ]
       - map: [ "helmetcover" ]
@@ -108,8 +141,8 @@
   - type: Perishable
   - type: Damageable
     damageModifierSet: Vulpkanin
-  - type: TemperatureProtection
-    coolingCoefficient: 0.1 # fur is insulating
+  - type: Temperature
+    atmosTemperatureTransferEfficiency: 0.01 # Aspis - fix cold resistance
   - type: Vocal
     sounds:
       Male: MaleVulpkanin
@@ -139,6 +172,41 @@
   components:
   - type: HumanoidAppearance
     species: Vulpkanin
+  # Aspis start: vulps resprite
+  - type: Inventory
+    femaleDisplacements:
+      jumpsuit:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: jumpsuit-female
+      jumpskirt:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: jumpskirt-female
+      shoes:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: shoes
+    displacements:
+      jumpsuit:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: jumpsuit
+      jumpskirt:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: jumpskirt
+      shoes:
+        sizeMaps:
+          32:
+            sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
+            state: shoes
+  # Aspis end
     hideLayersOnEquip: # Mono
     - Hair
     - HeadTop

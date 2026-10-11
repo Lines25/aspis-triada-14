@@ -4,9 +4,9 @@
   id: PartVulpkaninBase
   components:
   - type: Sprite
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
   - type: Icon
-    sprite: _DV/Mobs/Species/Vulpkanin/parts.rsi
+    sprite: _Aspis/Mobs/Species/Vulpkanin/parts.rsi # Aspis - resprite
   - type: BodyPart
     species: Vulpkanin
   - type: Extractable

@@ -1,0 +1,11 @@
+- type: entity
+  id: ActionJumpVulpkanin
+  name: Jump
+  description: Leap toward the selected location.
+  components:
+  - type: WorldTargetAction
+    useDelay: 10
+    icon: { sprite: Interface/Actions/jump.rsi, state: icon }
+    range: 0
+    checkCanAccess: false
+    event: !type:VulpkaninJumpActionEvent

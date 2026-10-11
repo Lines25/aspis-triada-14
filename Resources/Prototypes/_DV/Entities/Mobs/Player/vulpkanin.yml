@@ -5,6 +5,15 @@
   id: MobVulpkanin
   components:
     - type: CombatMode
+    - type: VulpkaninJump # Aspis tweak
+      action: ActionJumpVulpkanin
+      jumpSound:
+        path: /Audio/Weapons/punchmiss.ogg
+        params:
+          pitch: 1.33
+          volume: -5
+          variation: 0.05
+    - type: VulpkaninSniff # Aspis tweak
     - type: InteractionPopup
       successChance: 1
       interactSuccessString: pat-success-generic # Frontier - pat-success-generic<hugging-success-generic
