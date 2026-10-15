@@ -7,8 +7,6 @@
   children:
   - TriadRuleC1
   - TriadRuleC2
-  - TriadRuleC6
-  - TriadRuleC7
 
 - type: guideEntry
   id: TriadRuleC1
@@ -22,15 +20,17 @@
   text: "/ServerInfo/_Triad/Guidebook/Rules/CoreRules/RuleC2.xml"
   priority: 1
   children:
-  - TriadRuleC3
-  - TriadRuleC4
-  - TriadRuleC5
+  - TriadRuleC0
+  - TriadRuleC2
 
 - type: guideEntry
   id: TriadRuleC3
   name: guide-entry-section3
   text: "/ServerInfo/_Triad/Guidebook/Rules/CoreRules/RuleC3.xml"
   priority: 2
+  children:
+  - TriadRuleC0
+  - TriadRuleC1
 
 - type: guideEntry
   id: TriadRuleC4
