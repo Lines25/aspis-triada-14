@@ -1,4 +1,5 @@
 using Content.Client._NF.LateJoin;
+using Content.Shared._Aspis.Organizations;
 using Content.Client.Audio;
 using Content.Client.Eui;
 using Content.Client.GameTicking.Managers;
@@ -38,6 +39,16 @@ namespace Content.Client.Lobby
         // Frontier - save pickerwindow so it opens only once
         private PickerWindow? _pickerWindow = null;
 
+        // The choice is only a request. Server-side membership and the actual
+        // spawn beacon are checked again during job assignment.
+        private ClientPreferencesManager? _corporatePreferences;
+        private Button? _corporateButton;
+        private Label? _corporateLabel;
+        private bool _corporateEligible;
+        private bool _corporateSelected;
+        private int _corporateCharacterSlot = -1;
+
+
         protected override void Startup()
         {
             if (_userInterfaceManager.ActiveScreen == null)
@@ -46,9 +57,25 @@ namespace Content.Client.Lobby
             }
 
             Lobby = (LobbyGui) _userInterfaceManager.ActiveScreen;
+            _corporatePreferences = IoCManager.Resolve<IClientPreferencesManager>() as ClientPreferencesManager;
+            _corporateLabel = new Label
+            {
+                Text = "Корпоративний аванпост",
+            };
+            _corporateButton = new Button
+            {
+                Text = "Перевірка корпоративної станції...",
+                MinWidth = 220,
+            };
+            Lobby.CorporateOutpostSelection.AddChild(_corporateLabel);
+            Lobby.CorporateOutpostSelection.AddChild(_corporateButton);
+            _corporateButton.OnPressed += OnCorporateOutpostToggle;
+            if (_corporatePreferences != null)
+                _corporatePreferences.OnOrganizationOutpostLobbyReceived += OnCorporateOutpostResponse;
 
             var chatController = _userInterfaceManager.GetUIController<ChatUIController>();
             _gameTicker = _entityManager.System<ClientGameTicker>();
+            RefreshCorporateSelectionIfChanged();
             _contentAudioSystem = _entityManager.System<ContentAudioSystem>();
             _contentAudioSystem.LobbySoundtrackChanged += UpdateLobbySoundtrackInfo;
 
@@ -86,6 +113,17 @@ namespace Content.Client.Lobby
             _gameTicker.LobbyStatusUpdated -= LobbyStatusUpdated;
             _gameTicker.LobbyLateJoinStatusUpdated -= LobbyLateJoinStatusUpdated;
             _contentAudioSystem.LobbySoundtrackChanged -= UpdateLobbySoundtrackInfo;
+            if (_corporatePreferences != null)
+                _corporatePreferences.OnOrganizationOutpostLobbyReceived -= OnCorporateOutpostResponse;
+            if (_corporateButton != null)
+                _corporateButton.OnPressed -= OnCorporateOutpostToggle;
+            _corporatePreferences = null;
+            _corporateButton = null;
+            _corporateLabel = null;
+            _corporateCharacterSlot = -1;
+            _corporateEligible = false;
+            _corporateSelected = false;
+
 
             _voteManager.ClearPopupContainer();
 
@@ -127,6 +165,8 @@ namespace Content.Client.Lobby
 
         public override void FrameUpdate(FrameEventArgs e)
         {
+            if (!_gameTicker.IsGameStarted)
+                RefreshCorporateSelectionIfChanged();
             if (_gameTicker.IsGameStarted)
             {
                 Lobby!.StartTime.Text = string.Empty;
@@ -168,6 +208,46 @@ namespace Content.Client.Lobby
             Lobby!.StartTime.Text = Loc.GetString("lobby-state-round-start-countdown-text", ("timeLeft", text));
         }
 
+        private void RefreshCorporateSelectionIfChanged()
+        {
+            if (_corporatePreferences?.Preferences is not { } prefs || Lobby == null ||
+                _gameTicker.IsGameStarted)
+                return;
+            var slot = prefs.SelectedCharacterIndex;
+            if (_corporateCharacterSlot == slot)
+                return;
+            _corporateCharacterSlot = slot;
+            _corporateEligible = false;
+            _corporateSelected = false;
+            Lobby.CorporateOutpostSelection.Visible = false;
+            _corporatePreferences.RequestOrganizationOutpostLobby(slot);
+        }
+
+        private void OnCorporateOutpostResponse(MsgOrganizationOutpostLobbyResponse msg)
+        {
+            if (Lobby == null || _gameTicker.IsGameStarted || _corporateButton == null ||
+                _corporatePreferences?.Preferences == null ||
+                msg.Slot != _corporatePreferences.Preferences.SelectedCharacterIndex)
+                return;
+            _corporateEligible = msg.Eligible;
+            _corporateSelected = msg.Selected;
+            Lobby.CorporateOutpostSelection.Visible = msg.Eligible;
+            _corporateButton.Disabled = !msg.Eligible;
+            _corporateButton.Text = !msg.Selected
+                ? "Поява: звичайна станція (обрати аванпост)"
+                : $"Поява: {msg.StationName} (змінити)";
+            _corporateButton.ToolTip = msg.Reason;
+        }
+
+        private void OnCorporateOutpostToggle(BaseButton.ButtonEventArgs args)
+        {
+            if (!_corporateEligible || _corporatePreferences == null ||
+                _corporateCharacterSlot < 0 || _gameTicker.IsGameStarted)
+                return;
+            _corporatePreferences.RequestOrganizationOutpostLobby(
+                _corporateCharacterSlot, change: true, select: !_corporateSelected);
+        }
+
         private void LobbyStatusUpdated()
         {
             UpdateLobbyBackground();
@@ -183,6 +263,7 @@ namespace Content.Client.Lobby
         {
             if (_gameTicker.IsGameStarted)
             {
+                Lobby!.CorporateOutpostSelection.Visible = false;
                 Lobby!.ReadyButton.Text = Loc.GetString("lobby-state-ready-button-join-state");
                 Lobby!.ReadyButton.ToggleMode = false;
                 Lobby!.ReadyButton.Pressed = false;

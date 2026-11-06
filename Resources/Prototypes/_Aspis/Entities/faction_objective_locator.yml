@@ -1,0 +1,35 @@
+# Uses AdvancedMineralScanner texture and light, but is NOT an ore scanner.
+# Objective pings are emitted by OrganizationSystem based on a server-bound assignment.
+- type: entity
+  id: AspisFactionObjectiveLocator
+  parent: [ BaseItem, PowerCellSlotMediumItem ]
+  name: експедиційний локатор
+  description: Увімкніть локатор поблизу об'єкта експедиції. Частота сигналів зростає під час наближення до контрольного обладнання.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: Objects/Specific/Mining/mineral_scanner.rsi
+    layers:
+    - state: adv
+    - state: adv-o
+      shader: unshaded
+      visible: false
+      map: [ "enum.ToggleableVisuals.Layer" ]
+  - type: Item
+    storedRotation: -90
+  - type: Appearance
+  - type: GenericVisualizer
+    visuals:
+      enum.ToggleableVisuals.Enabled:
+        enum.ToggleableVisuals.Layer:
+          True: { visible: true }
+          False: { visible: false }
+  - type: ItemToggle
+    soundActivate:
+      path: /Audio/Weapons/click.ogg
+      params:
+        maxDistance: 1
+  - type: ToggleCellDraw
+  - type: PowerCellDraw
+    drawRate: 1.2
+    useRate: 0

@@ -4,8 +4,8 @@ meta:
   engineVersion: 289.0.2
   forkId: ""
   forkVersion: ""
-  time: 10/14/2026 18:22:51
-  entityCount: 14805
+  time: 11/06/2026 12:04:51
+  entityCount: 14807
 maps:
 - 1
 grids:
@@ -413,8 +413,8 @@ entities:
     - type: SpreaderGrid
       spreadQueues:
         Kudzu: []
-        Puddle: []
         MetalFoam: []
+        Puddle: []
         Smoke: []
     - type: Shuttle
       dampingModifier: 0.25
@@ -1097,10 +1097,6 @@ entities:
             color: '#808080FF'
           decals:
             1111: 17,-4
-            1112: 16,-4
-            1113: 15,-4
-            1114: 14,-4
-            1115: 13,-4
         - node:
             id: BrickTileSteelLineN
             color: '#B39456FF'
@@ -1174,10 +1170,6 @@ entities:
             1043: 7,-3
             1050: 18,-3
             1051: 17,-3
-            1052: 16,-3
-            1053: 15,-3
-            1054: 14,-3
-            1055: 13,-3
             1056: 12,-3
             1076: 3,-3
             1077: 2,-3
@@ -1186,10 +1178,6 @@ entities:
             color: '#808080FF'
           decals:
             1116: 17,-4
-            1117: 16,-4
-            1118: 15,-4
-            1119: 14,-4
-            1120: 13,-4
         - node:
             id: BrickTileSteelLineS
             color: '#B39456FF'
@@ -2126,9 +2114,6 @@ entities:
             color: '#FFA647FF'
           decals:
             1015: 12,-4
-            1016: 13,-4
-            1018: 15,-4
-            1019: 16,-4
             1020: 17,-4
             1021: 18,-4
             1022: 8,-4
@@ -2137,7 +2122,6 @@ entities:
             1025: 2,-5
             1026: 3,-5
             1027: 3,-4
-            1083: 14,-4
         - node:
             id: DiagonalCheckerBOverlay
             color: '#236487FF'
@@ -2262,22 +2246,14 @@ entities:
             1101: 7,-4
             1102: 8,-4
             1103: 12,-4
-            1104: 13,-4
-            1105: 14,-4
-            1106: 15,-4
-            1107: 16,-4
             1108: 17,-4
             1109: 18,-4
         - node:
             id: DiagonalCheckerBOverlay
             color: '#E18829FF'
           decals:
-            1084: 14,-4
-            1085: 15,-4
-            1086: 16,-4
             1087: 17,-4
             1088: 18,-4
-            1089: 13,-4
             1090: 12,-4
             1091: 8,-4
             1092: 7,-4
@@ -2296,9 +2272,6 @@ entities:
             1032: 3,-5
             1033: 2,-5
             1034: 12,-4
-            1035: 13,-4
-            1036: 15,-4
-            1038: 16,-4
             1039: 17,-4
             1040: 18,-4
         - node:
@@ -2820,9 +2793,6 @@ entities:
             14977: 29,0
             14978: 22,0
             14979: 27,-5
-            14980: 15,-3
-            14981: 16,-3
-            14982: 15,-3
             14983: 7,-3
             14984: 2,-3
             14985: -9,-4
@@ -3125,8 +3095,6 @@ entities:
             15447: 19,-3
             15448: 18,-3
             15449: 17,-3
-            15450: 16,-3
-            15451: 15,-3
             15452: 17,-4
             15453: 18,-4
             15454: 19,-3
@@ -4826,9 +4794,6 @@ entities:
             9072: 8,-4
             9073: 8,-4
             9074: 10,-3
-            9075: 13,-3
-            9076: 14,-3
-            9077: 14,-3
             9078: 17,-2
             9079: 18,-1
             9080: 14,0
@@ -4880,8 +4845,6 @@ entities:
             9126: 16,-1
             9127: 16,-2
             9128: 10,-3
-            9129: 15,-4
-            9130: 15,-4
             9131: 11,-4
             9132: 10,-8
             9133: 11,-8
@@ -6354,7 +6317,6 @@ entities:
             10181: 17,-3
             10182: 19,-4
             10183: 17,-4
-            10184: 14,-4
             10185: 11,-4
             10186: 11,-2
             10187: 10,-1
@@ -6483,7 +6445,6 @@ entities:
             10330: 21,-2
             10331: 19,-4
             10332: 18,-3
-            10333: 14,-4
             10334: 17,-2
             10335: 13,-2
             10336: 18,0
@@ -7292,7 +7253,6 @@ entities:
             10889: 20,-2
             10890: 17,-2
             10891: 18,-4
-            10892: 16,-3
             10893: 18,-4
             10894: 17,-4
             10895: 28,-5
@@ -7775,7 +7735,6 @@ entities:
             11446: 17,3
             11447: 19,0
             11448: 18,-3
-            11449: 15,-4
             11450: 17,-7
             11451: 20,-8
             11452: 21,-9
@@ -12175,6 +12134,14 @@ entities:
             2001: 10,7
             2002: 9,7
         - node:
+            id: ShiptestSplineSouth
+            color: '#FFFFFFFF'
+          decals:
+            17282: 13,-4
+            17283: 15,-4
+            17284: 14,-4
+            17285: 16,-4
+        - node:
             id: ShiptestSplineSouthEast
             color: '#4D9BE6FF'
           decals:
@@ -12229,6 +12196,11 @@ entities:
             color: '#FFA647FF'
           decals:
             1995: 16,7
+        - node:
+            id: ShiptestSplineSouthEast
+            color: '#FFFFFFFF'
+          decals:
+            17287: 16,-4
         - node:
             id: ShiptestSplineSouthEastCorner
             color: '#334E6DFF'
@@ -12375,6 +12347,11 @@ entities:
             color: '#FFA647FF'
           decals:
             1994: 8,7
+        - node:
+            id: ShiptestSplineSouthWest
+            color: '#FFFFFFFF'
+          decals:
+            17286: 13,-4
         - node:
             id: ShiptestSplineSouthWestCorner
             color: '#334E6DFF'
@@ -14091,6 +14068,12 @@ entities:
             14069: 4,39
         - node:
             id: TrimlineNorth
+            color: '#334E6DC8'
+          decals:
+            17280: 14,-4
+            17281: 15,-4
+        - node:
+            id: TrimlineNorth
             color: '#37789BFF'
           decals:
             3303: 41,54
@@ -14164,11 +14147,7 @@ entities:
             103: 27,6
             104: 28,6
             105: 29,6
-            410: 13,-3
             411: 12,-3
-            412: 14,-3
-            413: 15,-3
-            414: 16,-3
             415: 17,-3
             416: 18,-3
             417: 19,-3
@@ -14304,10 +14283,6 @@ entities:
             color: '#FF9821FF'
           decals:
             4480: 12,-3
-            4481: 13,-3
-            4482: 15,-3
-            4483: 14,-3
-            4484: 16,-3
             4485: 17,-3
             4486: 18,-3
             4487: 19,-3
@@ -14318,6 +14293,11 @@ entities:
           decals:
             14088: -17,34
             14105: -1,57
+        - node:
+            id: TrimlineNorthEast
+            color: '#334E6DC8'
+          decals:
+            17277: 13,-3
         - node:
             id: TrimlineNorthEast
             color: '#334E6DFF'
@@ -14387,6 +14367,11 @@ entities:
             14106: 0,57
         - node:
             id: TrimlineNorthEastCorner
+            color: '#334E6DC8'
+          decals:
+            17279: 13,-4
+        - node:
+            id: TrimlineNorthEastCorner
             color: '#37789BFF'
           decals:
             3300: 40,54
@@ -14424,6 +14409,11 @@ entities:
             6945: -13,-41
             6946: 3,-41
             16634: -84,-5
+        - node:
+            id: TrimlineNorthWest
+            color: '#334E6DC8'
+          decals:
+            17276: 16,-3
         - node:
             id: TrimlineNorthWest
             color: '#52B4E9FF'
@@ -14481,6 +14471,11 @@ entities:
           decals:
             14086: -18,34
             14104: -2,57
+        - node:
+            id: TrimlineNorthWestCorner
+            color: '#334E6DC8'
+          decals:
+            17278: 16,-4
         - node:
             id: TrimlineNorthWestCorner
             color: '#37789BFF'
@@ -20674,7 +20669,7 @@ entities:
       pos: -42.5,-1.5
     - type: Door
       state: Opening
-      secondsUntilStateChange: -1383.432
+      secondsUntilStateChange: -1678.8092
     - type: DeviceLinkSource
       lastSignals:
         DoorStatus: True
@@ -20688,7 +20683,7 @@ entities:
       pos: -43.5,-1.5
     - type: Door
       state: Opening
-      secondsUntilStateChange: -1383.232
+      secondsUntilStateChange: -1678.6093
     - type: DeviceLinkSource
       lastSignals:
         DoorStatus: True
@@ -28733,6 +28728,18 @@ entities:
       parent: 2
       rot: -1.5707963267948966 rad
       pos: 24.5,42.5
+  - uid: 1684
+    components:
+    - type: Transform
+      parent: 2
+      rot: 1.5707963267948966 rad
+      pos: 17.5,-3.5
+  - uid: 1687
+    components:
+    - type: Transform
+      parent: 2
+      rot: -1.5707963267948966 rad
+      pos: 12.5,-3.5
 - proto: BenchComfy
   entities:
   - uid: 1612
@@ -29173,30 +29180,6 @@ entities:
       pos: 50.5,18.5
 - proto: BenchRedComfy
   entities:
-  - uid: 1684
-    components:
-    - type: Transform
-      parent: 2
-      rot: 3.141592653589793 rad
-      pos: 13.5,-4.5
-  - uid: 1685
-    components:
-    - type: Transform
-      parent: 2
-      rot: 3.141592653589793 rad
-      pos: 14.5,-4.5
-  - uid: 1686
-    components:
-    - type: Transform
-      parent: 2
-      rot: 3.141592653589793 rad
-      pos: 15.5,-4.5
-  - uid: 1687
-    components:
-    - type: Transform
-      parent: 2
-      rot: 3.141592653589793 rad
-      pos: 16.5,-4.5
   - uid: 1688
     components:
     - type: Transform
@@ -42680,46 +42663,6 @@ entities:
     - type: Transform
       parent: 2
       pos: -10.5,-10.5
-  - uid: 4309
-    components:
-    - type: Transform
-      parent: 2
-      pos: 13.5,-3.5
-  - uid: 4310
-    components:
-    - type: Transform
-      parent: 2
-      pos: 13.5,-4.5
-  - uid: 4311
-    components:
-    - type: Transform
-      parent: 2
-      pos: 14.5,-3.5
-  - uid: 4312
-    components:
-    - type: Transform
-      parent: 2
-      pos: 14.5,-4.5
-  - uid: 4313
-    components:
-    - type: Transform
-      parent: 2
-      pos: 15.5,-3.5
-  - uid: 4314
-    components:
-    - type: Transform
-      parent: 2
-      pos: 15.5,-4.5
-  - uid: 4315
-    components:
-    - type: Transform
-      parent: 2
-      pos: 16.5,-3.5
-  - uid: 4316
-    components:
-    - type: Transform
-      parent: 2
-      pos: 16.5,-4.5
   - uid: 4317
     components:
     - type: Transform
@@ -44046,6 +43989,18 @@ entities:
       parent: 2
       rot: -1.5707963267948966 rad
       pos: -62.46036,-26.615116
+- proto: Chair
+  entities:
+  - uid: 4309
+    components:
+    - type: Transform
+      parent: 2
+      pos: 13.5,-3.5
+  - uid: 4313
+    components:
+    - type: Transform
+      parent: 2
+      pos: 15.5,-3.5
 - proto: ChairFolding
   entities:
   - uid: 4562
@@ -45318,6 +45273,16 @@ entities:
       startingCharge: 0
 - proto: ComputerBankATM
   entities:
+  - uid: 4310
+    components:
+    - type: Transform
+      parent: 2
+      rot: 3.141592653589793 rad
+      pos: 16.5,-4.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
   - uid: 4760
     components:
     - type: Transform
@@ -45541,6 +45506,28 @@ entities:
       parent: 2
       rot: -1.5707963267948966 rad
       pos: 16.5,8.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
+- proto: ComputerOrganizationRegistry
+  entities:
+  - uid: 4315
+    components:
+    - type: Transform
+      parent: 2
+      rot: 3.141592653589793 rad
+      pos: 13.5,-4.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
+  - uid: 4316
+    components:
+    - type: Transform
+      parent: 2
+      rot: 3.141592653589793 rad
+      pos: 15.5,-4.5
     - type: ApcPowerReceiver
       powerLoad: 5
     - type: Battery
@@ -55538,7 +55525,7 @@ entities:
       - 57
     - type: Door
       state: Closing
-      secondsUntilStateChange: -86089.83
+      secondsUntilStateChange: -86385.2
     - type: Firelock
       emergencyCloseCooldown: 14804.3518643
   - uid: 6310
@@ -83257,6 +83244,11 @@ entities:
       parent: 2
       rot: -1.5707963267948966 rad
       pos: 26.5,42.5
+  - uid: 14807
+    components:
+    - type: Transform
+      parent: 2
+      pos: 14.5,-4.5
 - proto: PoweredLEDSmallLight
   entities:
   - uid: 10121
@@ -83982,6 +83974,12 @@ entities:
       parent: 2
       rot: -1.5707963267948966 rad
       pos: 4.5,39.5
+  - uid: 14806
+    components:
+    - type: Transform
+      parent: 2
+      rot: 3.141592653589793 rad
+      pos: 17.5,-4.5
 - proto: PoweredlightSodium
   entities:
   - uid: 10245
@@ -91829,6 +91827,11 @@ entities:
       pos: 8.528369,42.62332
 - proto: TableReinforced
   entities:
+  - uid: 4311
+    components:
+    - type: Transform
+      parent: 2
+      pos: 14.5,-4.5
   - uid: 11540
     components:
     - type: Transform
@@ -108262,6 +108265,30 @@ entities:
       pos: -3.5,1.5
 - proto: WindowReinforcedDirectional
   entities:
+  - uid: 1685
+    components:
+    - type: Transform
+      parent: 2
+      rot: 1.5707963267948966 rad
+      pos: 12.5,-4.5
+  - uid: 1686
+    components:
+    - type: Transform
+      parent: 2
+      rot: -1.5707963267948966 rad
+      pos: 17.5,-4.5
+  - uid: 4312
+    components:
+    - type: Transform
+      parent: 2
+      rot: 1.5707963267948966 rad
+      pos: 12.5,-3.5
+  - uid: 4314
+    components:
+    - type: Transform
+      parent: 2
+      rot: -1.5707963267948966 rad
+      pos: 17.5,-3.5
   - uid: 14712
     components:
     - type: Transform

@@ -17,6 +17,7 @@ using Robust.Shared.Collections;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Timing;
 using Content.Shared._NF.Trade;
+using Content.Shared._Aspis.Organizations;
 
 namespace Content.Shared.Access.Systems;
 
@@ -113,6 +114,16 @@ public sealed partial class AccessReaderSystem : EntitySystem
     {
         if (!Resolve(target, ref reader, false))
             return true;
+
+        // Aspis: corporate doors are scoped to an exact organization GUID.
+        // The special configuration token has no IdCard/Access component, and
+        // neither regular station tags nor foreign-company tags grant access.
+        if (TryComp<OrganizationOutpostDoorComponent>(target, out _))
+        {
+            var check = new OrganizationOutpostAccessCheckEvent(user);
+            RaiseLocalEvent(target, check);
+            return check.Authorized;
+        }
 
         if (!reader.Enabled)
             return true;

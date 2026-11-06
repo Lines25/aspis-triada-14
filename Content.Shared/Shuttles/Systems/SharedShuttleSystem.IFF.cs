@@ -1,4 +1,5 @@
 using Content.Shared._Mono.Company;
+using Content.Shared._Aspis.Organizations;
 using Content.Shared.Shuttles.Components;
 using JetBrains.Annotations;
 using Robust.Shared.Prototypes;
@@ -15,7 +16,9 @@ public abstract partial class SharedShuttleSystem
 
     public Color GetIFFColor(EntityUid gridUid, bool self = false, IFFComponent? component = null)
     {
-        if (self)
+        // Member-owned vessels retain their organization's IFF color even on
+        // the pilot's own scanning console. Other ships keep the default green.
+        if (self && !HasComp<OrganizationShipIFFComponent>(gridUid))
         {
             return IFFComponent.SelfColor;
         }
@@ -32,12 +35,16 @@ public abstract partial class SharedShuttleSystem
     {
         var entName = MetaData(gridUid).EntityName;
 
-        if (self)
-        {
-            return entName;
-        }
+        var hasOrganization = TryComp<OrganizationShipIFFComponent>(gridUid, out var organization) &&
+            !string.IsNullOrWhiteSpace(organization.OrganizationName);
 
-        if (Resolve(gridUid, ref component, false) && (component.Flags & (IFFFlags.HideLabel | IFFFlags.Hide)) != 0x0)
+        if (self && !hasOrganization)
+            return entName;
+
+        // Honor stealth/hide-label for remote observers; a pilot may still
+        // inspect their own vessel's organization label.
+        if (!self && Resolve(gridUid, ref component, false) &&
+            (component.Flags & (IFFFlags.HideLabel | IFFFlags.Hide)) != 0x0)
         {
             return null;
         }
@@ -72,7 +79,12 @@ public abstract partial class SharedShuttleSystem
         var prefix = component != null ? GetServiceFlagsPrefix(component.ServiceFlags) : string.Empty;
         var labelText = prefix + (string.IsNullOrEmpty(entName) ? Loc.GetString("shuttle-console-unknown") : entName);
 
-        // Add company info if available
+        // Aspis membership is per character and per organization, not the old
+        // global Mono company prototype. It takes precedence on affiliated ships.
+        if (hasOrganization)
+            return $"{labelText}\n{organization!.OrganizationName}";
+
+        // Preserve the existing static company tags on unaffiliated ships.
         if (companyName != null && companyColor != null)
         {
             // Return a formatted label that the client can parse properly

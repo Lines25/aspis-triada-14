@@ -10,6 +10,7 @@ using Robust.Client.UserInterface.Controls;
 using Robust.Client.UserInterface.XAML;
 using Robust.Shared.Map;
 using Robust.Shared.Map.Components;
+using Robust.Shared.Physics.Components;
 using Robust.Shared.Timing;
 
 namespace Content.Client.Shuttles.UI;
@@ -141,6 +142,11 @@ public sealed partial class ShuttleDockControl : BaseShuttleControl
         {
             EntManager.TryGetComponent(grid.Owner, out IFFComponent? iffComp);
 
+            // Procedural planet surfaces may expose a MapGrid without a
+            // PhysicsComponent. They are not docking targets, and passing them
+            // to CanDraw invokes Resolve() and floods the client error log.
+            if (!EntManager.HasComponent<PhysicsComponent>(grid.Owner))
+                continue;
             if (grid.Owner != GridEntity && !_shuttles.CanDraw(grid.Owner, iffComp: iffComp))
                 continue;
 

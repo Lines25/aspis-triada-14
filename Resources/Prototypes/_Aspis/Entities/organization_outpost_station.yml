@@ -1,0 +1,24 @@
+# A physically registered corporate station, not a private FTL map.
+# StationJobs/StationSpawning deliberately absent until authorization and
+# verified safe entry beacons are implemented. StationData makes it appear
+# in the sector registry while preventing unapproved lobby placement.
+- type: entity
+  id: AspisOrganizationOutpostStation
+  parent: BaseStation
+  name: корпоративний аванпост
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+
+# This variant is used ONLY if a saved, signed corporate station actually
+# contains at least one server-validated corporate beacon. Otherwise the
+# station remains outside job-selection to prevent unapproved login spawns.
+- type: entity
+  id: AspisOrganizationOutpostJoinableStation
+  parent: [AspisOrganizationOutpostStation, BaseStationJobsSpawning]
+  name: корпоративний аванпост (доступний для появи)
+  components:
+  - type: StationJobs
+    availableJobs:
+      Contractor: [8, 8]
+  - type: StationSpawning

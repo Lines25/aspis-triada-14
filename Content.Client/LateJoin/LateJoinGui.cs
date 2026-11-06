@@ -1,6 +1,8 @@
 using System.Linq;
 using System.Numerics;
 using Content.Client.CrewManifest;
+using Content.Client._Aspis.Organizations;
+using Content.Shared._Aspis.Organizations;
 using Content.Client.GameTicking.Managers;
 using Content.Client.Lobby;
 using Content.Client.UserInterface.Controls;
@@ -44,6 +46,8 @@ namespace Content.Client.LateJoin
         private readonly List<ScrollContainer> _jobLists = new();
 
         private readonly Control _base;
+        private readonly Dictionary<NetEntity, OrganizationOutpostDirectoryEntry> _outpostCards = new();
+        private OrganizationOutpostDirectoryEntry[] _unloadedOutposts = [];
 
         public LateJoinGui()
         {
@@ -64,7 +68,9 @@ namespace Content.Client.LateJoin
             Contents.AddChild(_base);
 
             _jobRequirements.Updated += RebuildUI;
+            _preferencesManager.OnOrganizationOutpostDirectoryReceived += OnOutpostDirectory;
             RebuildUI();
+            _preferencesManager.RequestOrganizationOutpostDirectory();
 
             SelectedId += x =>
             {
@@ -75,6 +81,16 @@ namespace Content.Client.LateJoin
             };
 
             _gameTicker.LobbyJobsAvailableUpdated += JobsAvailableUpdated;
+        }
+
+        private void OnOutpostDirectory(MsgOrganizationOutpostDirectoryResponse response)
+        {
+            _outpostCards.Clear();
+            _unloadedOutposts = response.Stations.Where(entry => entry.Station == NetEntity.Invalid).ToArray();
+            foreach (var entry in response.Stations)
+                if (entry.Station != NetEntity.Invalid)
+                    _outpostCards[entry.Station] = entry;
+            RebuildUI();
         }
 
         private void RebuildUI()
@@ -111,23 +127,43 @@ namespace Content.Client.LateJoin
                     }
                 };
 
-                _base.AddChild(new StripeBack()
+                _outpostCards.TryGetValue(id, out var corporate);
+                var heading = new BoxContainer
                 {
-                    Children =
-                    {
-                        new PanelContainer()
-                        {
-                            Children =
-                            {
-                                new Label()
-                                {
-                                    Text = name,
-                                    Align = Label.AlignMode.Center,
-                                },
-                                collapseButton
-                            }
-                        }
-                    }
+                    Orientation = LayoutOrientation.Horizontal,
+                    HorizontalExpand = true,
+                    SeparationOverride = 10
+                };
+                if (corporate != null)
+                    heading.AddChild(new OrganizationBannerControl(corporate.Banner, 56));
+                var headingText = new BoxContainer
+                {
+                    Orientation = LayoutOrientation.Vertical,
+                    HorizontalExpand = true,
+                    SeparationOverride = 3
+                };
+                headingText.AddChild(new Label
+                {
+                    Text = corporate?.Name ?? name,
+                    Align = Label.AlignMode.Center,
+                    FontColorOverride = corporate is { Available: false }
+                        ? Robust.Shared.Maths.Color.FromHex("#A0A0A0")
+                        : Robust.Shared.Maths.Color.White
+                });
+                if (corporate != null)
+                {
+                    if (!string.IsNullOrEmpty(corporate.Description))
+                        headingText.AddChild(new Label { Text = corporate.Description,
+                            FontColorOverride = Robust.Shared.Maths.Color.FromHex("#B9C5CE") });
+                    if (!corporate.Available)
+                        headingText.AddChild(new Label { Text = "✕  Станція зараз недоступна",
+                            FontColorOverride = Robust.Shared.Maths.Color.FromHex("#E88181") });
+                }
+                heading.AddChild(headingText);
+                heading.AddChild(collapseButton);
+                _base.AddChild(new StripeBack
+                {
+                    Children = { new PanelContainer { Children = { heading } } }
                 });
 
                 if (_configManager.GetCVar(CCVars.CrewManifestWithoutEntity))
@@ -170,11 +206,15 @@ namespace Content.Client.LateJoin
 
                 _jobButtons[id] = new Dictionary<string, List<JobButton>>();
 
+                // A station can be known before its jobs have been published.
+                // Keep its card visible but do not offer an invalid join action.
+                if (!_gameTicker.StationJobInformationList.TryGetValue(id, out var stationAvailable))
+                    continue;
+
+                _jobCategories[id] = new Dictionary<string, BoxContainer>();
                 foreach (var department in departments)
                 {
                     var departmentName = Loc.GetString(department.Name);
-                    _jobCategories[id] = new Dictionary<string, BoxContainer>();
-                    var stationAvailable = _gameTicker.StationJobInformationList[id];
                     var jobsAvailable = new List<JobPrototype>();
 
                     foreach (var jobId in department.Roles)
@@ -259,6 +299,8 @@ namespace Content.Client.LateJoin
                         category.AddChild(jobButton);
 
                         jobButton.OnPressed += _ => SelectedId.Invoke((id, jobButton.JobId));
+                        if (corporate is { Available: false })
+                            jobButton.Disabled = true;
 
                         if (!_jobRequirements.IsAllowed(prototype, (HumanoidCharacterProfile?)_preferencesManager.Preferences?.SelectedCharacter, out var reason))
                         {
@@ -294,6 +336,34 @@ namespace Content.Client.LateJoin
                     }
                 }
             }
+            AppendUnavailableOutpostCards();
+        }
+
+        // A paid corporate outpost that failed to deploy must still be visible
+        // as unavailable. It has no live station NetEntity and no join action.
+        private void AppendUnavailableOutpostCards()
+        {
+            foreach (var outpost in _unloadedOutposts.Concat(_outpostCards
+                         .Where(pair => !_gameTicker.StationNames.ContainsKey(pair.Key))
+                         .Select(pair => pair.Value)))
+            {
+                var group = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
+                    HorizontalExpand = true, SeparationOverride = 8 };
+                group.AddChild(new OrganizationBannerControl(outpost.Banner, 50));
+                var info = new BoxContainer { Orientation = LayoutOrientation.Vertical,
+                    HorizontalExpand = true };
+                info.AddChild(new Label { Text = outpost.Name,
+                    FontColorOverride = Robust.Shared.Maths.Color.FromHex("#969FA7") });
+                if (!string.IsNullOrEmpty(outpost.Description))
+                    info.AddChild(new Label { Text = outpost.Description });
+                info.AddChild(new Label { Text = "✕  Станція зараз недоступна",
+                    FontColorOverride = Robust.Shared.Maths.Color.FromHex("#E88181") });
+                group.AddChild(info);
+                _base.AddChild(new StripeBack
+                {
+                    Children = { new PanelContainer { Children = { group } } }
+                });
+            }
         }
 
         private void JobsAvailableUpdated(IReadOnlyDictionary<NetEntity, StationJobInformation> updatedJobs)
@@ -314,7 +384,8 @@ namespace Content.Client.LateJoin
                     foreach (var matchingJobButton in existingJobEntry.Value.Where(matchingJobButton => matchingJobButton.Amount != updatedJobValue))
                     {
                         matchingJobButton.RefreshLabel(updatedJobValue);
-                        matchingJobButton.Disabled |= matchingJobButton.Amount == 0;
+                        matchingJobButton.Disabled |= matchingJobButton.Amount == 0 ||
+                            (_outpostCards.TryGetValue(stationNetEntity, out var info) && !info.Available);
                     }
                 }
             }
@@ -328,6 +399,7 @@ namespace Content.Client.LateJoin
             {
                 _jobRequirements.Updated -= RebuildUI;
                 _gameTicker.LobbyJobsAvailableUpdated -= JobsAvailableUpdated;
+                _preferencesManager.OnOrganizationOutpostDirectoryReceived -= OnOutpostDirectory;
                 _jobButtons.Clear();
                 _jobCategories.Clear();
             }
