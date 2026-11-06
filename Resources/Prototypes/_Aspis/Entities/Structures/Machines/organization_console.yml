@@ -1,0 +1,30 @@
+- type: entity
+  parent:
+  - BaseStructureIndestructible
+  - BaseComputerAiAccess
+  - BaseStructureAccessReaderImmuneToEmag
+  - BaseStructureDisableScrewing
+  id: ComputerOrganizationRegistry
+  name: organization registry
+  description: Register a faction or company, manage its membership, or apply to join another organization.
+  components:
+  - type: Sprite
+    netsync: false
+    sprite: Structures/Machines/computers.rsi
+    layers:
+    - map: ["computerLayerBody"]
+      state: computer
+    - map: ["computerLayerKeyboard"]
+      state: generic_keyboard
+    - map: ["computerLayerScreen"]
+      state: generic
+    - map: ["computerLayerKeys"]
+      state: generic_keys
+  - type: OrganizationConsole
+  - type: ActivatableUI
+    key: enum.OrganizationConsoleUiKey.Key
+    singleUser: true
+  - type: UserInterface
+    interfaces:
+      enum.OrganizationConsoleUiKey.Key:
+        type: OrganizationConsoleBui

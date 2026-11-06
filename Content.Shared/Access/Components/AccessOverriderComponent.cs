@@ -1,4 +1,5 @@
 using Content.Shared.Access.Systems;
+using Content.Shared._Aspis.Organizations;
 using Content.Shared.Containers.ItemSlots;
 using Robust.Shared.Audio;
 using Robust.Shared.GameStates;
@@ -33,6 +34,18 @@ public sealed partial class AccessOverriderComponent : Component
         }
     }
 
+    /// <summary>Corporate permissions use an independent organization-scoped reader, never AccessLevel tags.</summary>
+    [Serializable, NetSerializable]
+    public sealed class WriteCorporateOutpostTierMessage : BoundUserInterfaceMessage
+    {
+        public readonly OrganizationOutpostAccessTier Tier;
+
+        public WriteCorporateOutpostTierMessage(OrganizationOutpostAccessTier tier)
+        {
+            Tier = tier;
+        }
+    }
+
     [DataField, AutoNetworkedField]
     public List<ProtoId<AccessLevelPrototype>> AccessLevels = new();
 
@@ -43,6 +56,9 @@ public sealed partial class AccessOverriderComponent : Component
     [Serializable, NetSerializable]
     public sealed class AccessOverriderBoundUserInterfaceState : BoundUserInterfaceState
     {
+        public readonly bool CorporateMode;
+        public readonly bool CorporateTargetValid;
+        public readonly OrganizationOutpostAccessTier CorporateCurrentTier;
         public readonly string TargetLabel;
         public readonly Color TargetLabelColor;
         public readonly string PrivilegedIdName;
@@ -59,8 +75,14 @@ public sealed partial class AccessOverriderComponent : Component
             ProtoId<AccessLevelPrototype>[]? missingPrivilegesList,
             string privilegedIdName,
             string targetLabel,
-            Color targetLabelColor)
+            Color targetLabelColor,
+            bool corporateMode = false,
+            bool corporateTargetValid = false,
+            OrganizationOutpostAccessTier corporateCurrentTier = OrganizationOutpostAccessTier.Member)
         {
+            CorporateMode = corporateMode;
+            CorporateTargetValid = corporateTargetValid;
+            CorporateCurrentTier = corporateCurrentTier;
             IsPrivilegedIdPresent = isPrivilegedIdPresent;
             IsPrivilegedIdAuthorized = isPrivilegedIdAuthorized;
             TargetAccessReaderIdAccessList = targetAccessReaderIdAccessList;

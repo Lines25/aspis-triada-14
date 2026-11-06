@@ -1,6 +1,7 @@
 - type: vendingMachineInventory
   id: FlatpackVendInventory
   startingInventory:
+    ComputerOrganizationRegistryFlatpack: 4294967295 # Aspis, 10 000 $ exact vend price
     #ShuttleGunKineticFlatpack: 4294967295 # Infinite
     OreProcessorFlatpack: 4294967295 # Infinite
     AutolatheFlatpack: 4294967295 # Infinite

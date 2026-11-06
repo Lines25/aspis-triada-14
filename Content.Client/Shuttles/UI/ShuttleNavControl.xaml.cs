@@ -2,6 +2,7 @@ using System.Linq;
 using System.Numerics;
 using Content.Client._Mono.Radar;
 using Content.Client.Station; // Frontier
+using Content.Shared._Aspis.Organizations;
 using Content.Shared._Crescent.ShipShields;
 using Content.Shared._Mono.Company;
 using Content.Shared._Mono.Detection;
@@ -809,7 +810,12 @@ public partial class ShuttleNavControl : BaseShuttleControl // Mono
 
                     // Get company color if entity has CompanyComponent
                     var displayColor = labelColor;
-                    if (!hideLabel && EntManager.TryGetComponent(gUid, out Shared._Mono.Company.CompanyComponent? companyComp) &&
+                    // Organization IFF already supplies the faction color used by the
+                    // ship outline. Do not let the legacy Mono company tag override
+                    // that color for the vessel name or its faction subtitle.
+                    if (!hideLabel &&
+                        !EntManager.HasComponent<OrganizationShipIFFComponent>(gUid) &&
+                        EntManager.TryGetComponent(gUid, out Shared._Mono.Company.CompanyComponent? companyComp) &&
                         !string.IsNullOrEmpty(companyComp.CompanyName))
                     {
                         var prototypeManager = IoCManager.Resolve<IPrototypeManager>();

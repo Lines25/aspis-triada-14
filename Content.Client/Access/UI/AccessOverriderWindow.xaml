@@ -3,12 +3,14 @@
     <BoxContainer Orientation="Vertical">
         <GridContainer Columns="2">
             <GridContainer Columns="3" HorizontalExpand="True">
-                <Label Text="{Loc 'access-overrider-window-privileged-id'}" />
+                <Label Name="PrivilegedIdHeading" Text="{Loc 'access-overrider-window-privileged-id'}" />
                 <Button Name="PrivilegedIdButton" Access="Public"/>
                 <Label Name="PrivilegedIdLabel" />
             </GridContainer>
         </GridContainer>
         <Label Name="TargetNameLabel" />
+        <Label Name="CorporateAccessLabel" Visible="False" Text="Корпоративний доступ: рівень для дверей" />
+        <GridContainer Name="CorporateAccessGrid" Visible="False" Columns="3" HorizontalAlignment="Center" />
         <Control MinSize="0 8"/>
         <GridContainer Name="AccessLevelGrid" Columns="5" HorizontalAlignment="Center">
 

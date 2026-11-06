@@ -1,0 +1,47 @@
+# Special-purpose corporate engineering token. Not an ID card, not PDA access,
+# not a ship registration credential and not a station-wide access card.
+- type: entity
+  id: AspisOutpostAccessConfigurator
+  parent: BaseItem
+  name: корпоративна карта конфігуратора
+  description: Технічний ключ для налаштування трьох корпоративних рівнів доступу на власному аванпості. Не є посвідченням особи.
+  components:
+  - type: Sprite
+    sprite: Objects/Tools/access_configurator.rsi
+    state: icon
+  - type: Item
+    size: Small
+  - type: OrganizationOutpostConfigurator
+  # Reuse the stock Access Configuration UI, but in corporate-only mode.
+  # No global access levels, no standard ID card, no privileged station ID.
+  - type: AccessOverrider
+    accessLevels: []
+    doAfter: 0.5
+  - type: UserInterface
+    interfaces:
+      enum.AccessOverriderUiKey.Key:
+        type: AccessOverriderBoundUserInterface
+  - type: ActivatableUI
+    key: enum.AccessOverriderUiKey.Key
+    requiresComplex: true
+    requireActiveHand: false
+    singleUser: true
+  - type: ItemSlots
+  - type: ContainerContainer
+    containers:
+      AccessOverrider-privilegedId: !type:ContainerSlot
+
+# A maker places these in the saved ship design, or prints them for the
+# current round. The server checks clearance and binds them to the loaded org.
+- type: entity
+  id: AspisOutpostSpawnBeacon
+  parent: BaseItem
+  name: корпоративний маяк появи
+  description: Розмістіть на доступній підлозі корпоративного аванпосту і активуйте. Роль визначається під час друку.
+  components:
+  - type: Sprite
+    sprite: Objects/Tools/access_configurator.rsi
+    state: icon
+  - type: Item
+    size: Small
+  - type: OrganizationOutpostSpawnBeacon

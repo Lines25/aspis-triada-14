@@ -1,5 +1,6 @@
 using System.Buffers;
 using System.Numerics;
+using Content.Shared._Aspis.Organizations;
 using Content.Client.Shuttles.Systems;
 using Content.Shared._Mono.Company;
 using Content.Shared._Mono.Detection;
@@ -90,7 +91,9 @@ public sealed partial class ShuttleMapControl : BaseShuttleControl
     private readonly List<IMapObject> _mapObjects = new();
     private readonly Dictionary<Color, List<Vector2>> _verts = new();
     private readonly Dictionary<Color, List<Vector2>> _edges = new();
-    private readonly Dictionary<Color, List<(Vector2, string, bool)>> _strings = new();
+    // Remember which grid owns each label: legacy company colors must never
+    // leak from a different vessel onto this one's text.
+    private readonly Dictionary<Color, List<(Vector2, string, bool, EntityUid?)>> _strings = new();
     private readonly List<ShuttleExclusionObject> _viewportExclusions = new();
 
     public ShuttleMapControl() : base(256f, 4096f, 512f)
@@ -369,7 +372,7 @@ public sealed partial class ShuttleMapControl : BaseShuttleControl
                 _beacons.Add(mapO);
 
                 var existingStrings = _strings.GetOrNew(displayColor);
-                existingStrings.Add((beaconUiPos, beaconName, true));
+                existingStrings.Add((beaconUiPos, beaconName, true, null));
             }
         }
 
@@ -433,7 +436,7 @@ public sealed partial class ShuttleMapControl : BaseShuttleControl
                 continue;
 
             var existingStrings = _strings.GetOrNew(gridColor);
-            existingStrings.Add((gridUiPos, iffText, !hideLabel));
+            existingStrings.Add((gridUiPos, iffText, !hideLabel, grid.Owner));
         }
 
         // Batch the colors whoopie
@@ -452,7 +455,7 @@ public sealed partial class ShuttleMapControl : BaseShuttleControl
         {
             var adjustedColor = Color.FromSrgb(color);
 
-            foreach (var (gridUiPos, iffText, hasLabel) in sendStrings)
+            foreach (var (gridUiPos, iffText, hasLabel, gridUid) in sendStrings)
             {
                 var textWidth = handle.GetDimensions(_font, iffText, 1f);
 
@@ -461,21 +464,17 @@ public sealed partial class ShuttleMapControl : BaseShuttleControl
                 var mainLabel = lines[0];
                 var mainTextWidth = handle.GetDimensions(_font, mainLabel, 1f);
 
-                // Get company color if entity has CompanyComponent
+                // Use the same IFF color as the ship outline for Aspis
+                // organizations. Unaffiliated ships keep the original Mono
+                // company label color, scoped strictly to the correct grid.
                 var displayColor = adjustedColor;
-                if (hasLabel)
+                if (hasLabel && gridUid is { } labelGrid &&
+                    !EntManager.HasComponent<OrganizationShipIFFComponent>(labelGrid) &&
+                    EntManager.TryGetComponent(labelGrid, out Shared._Mono.Company.CompanyComponent? companyComp) &&
+                    !string.IsNullOrEmpty(companyComp.CompanyName) &&
+                    IoCManager.Resolve<IPrototypeManager>().TryIndex<CompanyPrototype>(companyComp.CompanyName, out var gridCompanyProto))
                 {
-                    foreach (var mapObj in viewportObjects)
-                    {
-                        if (mapObj is GridMapObject gridObj &&
-                            EntManager.TryGetComponent(gridObj.Entity, out Shared._Mono.Company.CompanyComponent? companyComp) &&
-                            !string.IsNullOrEmpty(companyComp.CompanyName) &&
-                            IoCManager.Resolve<IPrototypeManager>().TryIndex<CompanyPrototype>(companyComp.CompanyName, out var gridCompanyProto))
-                        {
-                            displayColor = Color.FromSrgb(gridCompanyProto.Color);
-                            break;
-                        }
-                    }
+                    displayColor = Color.FromSrgb(gridCompanyProto.Color);
                 }
 
                 // Draw main ship label with company color if available

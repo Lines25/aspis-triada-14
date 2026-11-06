@@ -1,0 +1,83 @@
+# v47: larger hand-authored maps and bounded, one-time NPC encounters.
+# The same physical-object objectives work on all catalog sites. Add more
+# pre-existing Maps/*.yml here after checking walkability and docking in game.
+# Hostiles are spawned only when a shuttle first commits to this site's FTL.
+# These are server-only prototypes; not general sector POIs or player claims.
+
+- type: aspisFactionExpeditionSite
+  id: AspisFactionLostPrison
+  name: Покинутий тюремний корабель
+  gridPath: /Maps/Ruins/ruined_prison_ship.yml
+  minimumConnectedFloor: 180
+  minimumTraversalTiles: 24
+  hostileCount: 7
+  hostilePrototypes:
+  - MobRogueSiliconScrapThrusters
+  - MobRogueSiliconDroneLethals
+  - MobRogueSiliconHunter
+  hazardDescription: Пошкоджені тюремні системи й озброєні автономні дрони
+
+- type: aspisFactionExpeditionSite
+  id: AspisFactionDerelict
+  name: Покинута космічна станція
+  gridPath: /Maps/Ruins/derelict.yml
+  minimumConnectedFloor: 260
+  minimumTraversalTiles: 36
+  hostileCount: 9
+  hostilePrototypes:
+  - MobRogueSiliconScrapThrusters
+  - MobRogueSiliconDroneLethals
+  - MobRogueSiliconHunter
+  hazardDescription: Агресивна станційна автоматика й пошкоджені відсіки
+
+- type: aspisFactionExpeditionSite
+  id: AspisFactionAiSatellite
+  name: Занедбаний центр керування ШІ
+  gridPath: /Maps/Ruins/old_ai_sat.yml
+  minimumConnectedFloor: 160
+  minimumTraversalTiles: 23
+  hostileCount: 6
+  hostilePrototypes:
+  - MobRogueSiliconScrapThrusters
+  - MobRogueSiliconDroneLethals
+  - MobRogueSiliconHunter
+  hazardDescription: Ворожі роботи та автоматичні захисні системи
+
+- type: aspisFactionExpeditionSite
+  id: AspisFactionBiodome
+  name: Покинута біосфера
+  gridPath: /Maps/Ruins/biodome_satellite.yml
+  minimumConnectedFloor: 150
+  minimumTraversalTiles: 22
+  hostileCount: 7
+  hostilePrototypes:
+  - NFMobXenoRunner
+  - NFMobXenoDrone
+  - NFMobXenoSpitter
+  hazardDescription: Небезпечні чужорідні організми
+
+- type: aspisFactionExpeditionSite
+  id: AspisFactionAbandonedOutpost
+  name: Віддалений аварійний аванпост
+  gridPath: /Maps/Ruins/abandoned_outpost.yml
+  minimumConnectedFloor: 145
+  minimumTraversalTiles: 22
+  hostileCount: 6
+  hostilePrototypes:
+  - MobRogueSiliconScrap
+  - MobRogueSiliconScrapThrusters
+  - MobRogueSiliconDroneLethals
+  hazardDescription: Зламані промислові роботи й нестабільне обладнання
+
+- type: aspisFactionExpeditionSite
+  id: AspisFactionFlagship
+  name: Загублений важкий корабель
+  gridPath: /Maps/Ruins/empty_flagship.yml
+  minimumConnectedFloor: 240
+  minimumTraversalTiles: 34
+  hostileCount: 9
+  hostilePrototypes:
+  - MobRogueSiliconScrapThrusters
+  - MobRogueSiliconDroneLethals
+  - MobRogueSiliconHunter
+  hazardDescription: Бойові дрони й закриті відсіки великого корабля
