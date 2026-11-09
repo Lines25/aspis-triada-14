@@ -46,6 +46,11 @@
                         <!-- Voting Popups -->
                         <BoxContainer Orientation="Vertical" SeparationOverride="4" Name="VoteContainer"
                                       Access="Public" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="0 8" />
+                        <!-- An explicit, per-character corporate spawn preference.
+                             The server authorizes the station at actual spawn time. -->
+                        <BoxContainer Name="CorporateOutpostSelection" Access="Public"
+                                      Orientation="Vertical" HorizontalAlignment="Left"
+                                      Margin="0 6" Visible="False" />
                     </BoxContainer>
                     <!-- Vertical Padding-->
                     <Control VerticalExpand="True" />

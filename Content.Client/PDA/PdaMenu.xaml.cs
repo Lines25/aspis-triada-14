@@ -1,7 +1,11 @@
 using Content.Client.GameTicking.Managers;
+using Content.Client._Aspis.Organizations;
+using System.Collections.Generic;
+using Content.Shared._Aspis.Organizations;
 using Content.Shared.PDA;
 using Robust.Shared.Utility;
 using Content.Shared.CartridgeLoader;
+using Robust.Shared.Maths;
 using Content.Client.Message;
 using Content.Shared._NF.Bank;
 using Robust.Client.UserInterface;
@@ -10,6 +14,7 @@ using Robust.Client.Graphics;
 using Robust.Client.UserInterface.XAML;
 using Robust.Client.UserInterface.Controls;
 using Robust.Shared.Timing;
+using static Robust.Client.UserInterface.Controls.BoxContainer;
 
 namespace Content.Client.PDA
 {
@@ -20,12 +25,31 @@ namespace Content.Client.PDA
         [Dependency] private IGameTiming _gameTiming = default!;
         [Dependency] private IEntitySystemManager _entitySystem = default!;
         private readonly ClientGameTicker _gameTicker;
+        private readonly OrganizationQuotaPdaSystem _quotaPda;
 
         public const int HomeView = 0;
         public const int ProgramListView = 1;
         public const int SettingsView = 2;
         public const int ProgramContentView = 3;
 
+        private readonly Color _organizationButtonColor = Color.FromHex("#314E3A");
+        private PdaUpdateState? _lastOrganizationState;
+        // Local PDA navigation: does not add server messages or bypass roster privacy.
+        private int _organizationPage;
+        private bool _organizationProgramActive;
+        private ScrollContainer? _organizationScroll;
+        private string _expandedOrganizationQuota = string.Empty;
+        private readonly HashSet<string> _expandedOrganizationStepLists = new();
+        private readonly HashSet<string> _expandedOrganizationStepDetails = new();
+
+        public void CloseOrganizationProgram()
+        {
+            _organizationProgramActive = false;
+            if (_organizationScroll != null && _organizationScroll.Parent == ProgramView)
+                ProgramView.RemoveChild(_organizationScroll);
+            _organizationScroll = null;
+        }
+        private string _organizationMemberFilter = string.Empty;
 
         private string _pdaOwner = Loc.GetString("comp-pda-ui-unknown");
         private string _owner = Loc.GetString("comp-pda-ui-unknown");
@@ -34,20 +58,28 @@ namespace Content.Client.PDA
         private string _alertLevel = Loc.GetString("comp-pda-ui-unknown");
         private string _instructions = Loc.GetString("comp-pda-ui-unknown");
 
-        private string _balance = Loc.GetString("comp-pda-ui-unknown"); // Frontier
-        private string _shuttleDeed = Loc.GetString("comp-pda-ui-unknown"); // Frontier
-        private string _currentDate = Loc.GetString("comp-pda-ui-unknown"); // DeltaV - PDA date
+        private string _balance = Loc.GetString("comp-pda-ui-unknown");
+        private string _shuttleDeed = Loc.GetString("comp-pda-ui-unknown");
+        private string _currentDate = Loc.GetString("comp-pda-ui-unknown");
 
-        private TimeSpan? _roundEndTime = null; // Frontier
+        private TimeSpan? _roundEndTime = null;
         private int _currentView;
 
         public event Action<EntityUid>? OnProgramItemPressed;
         public event Action<EntityUid>? OnUninstallButtonPressed;
         public event Action<EntityUid>? OnInstallButtonPressed;
+
         public PdaMenu()
         {
             IoCManager.InjectDependencies(this);
             _gameTicker = _entitySystem.GetEntitySystem<ClientGameTicker>();
+            _quotaPda = _entitySystem.GetEntitySystem<OrganizationQuotaPdaSystem>();
+            _quotaPda.SnapshotUpdated += () =>
+            {
+                if (_organizationProgramActive && _organizationPage == 2 &&
+                    _currentView == ProgramContentView)
+                    ShowOrganizationProgram();
+            };
             RobustXamlLoader.Load(this);
 
             ViewContainer.OnChildAdded += control => control.Visible = false;
@@ -60,94 +92,52 @@ namespace Content.Client.PDA
             EjectPaiButton.IconTexture = new SpriteSpecifier.Texture(new("/Textures/Interface/pai.png"));
             ProgramCloseButton.IconTexture = new SpriteSpecifier.Texture(new("/Textures/Interface/Nano/cross.svg.png"));
 
-
             HomeButton.OnPressed += _ => ToHomeScreen();
-
             ProgramListButton.OnPressed += _ =>
             {
                 HomeButton.IsCurrent = false;
                 ProgramListButton.IsCurrent = true;
                 SettingsButton.IsCurrent = false;
                 ProgramTitle.IsCurrent = false;
-
+                _organizationProgramActive = false;
                 ChangeView(ProgramListView);
             };
-
-
             SettingsButton.OnPressed += _ =>
             {
                 HomeButton.IsCurrent = false;
                 ProgramListButton.IsCurrent = false;
                 SettingsButton.IsCurrent = true;
                 ProgramTitle.IsCurrent = false;
-
+                _organizationProgramActive = false;
                 ChangeView(SettingsView);
             };
-
             ProgramTitle.OnPressed += _ =>
             {
                 HomeButton.IsCurrent = false;
                 ProgramListButton.IsCurrent = false;
                 SettingsButton.IsCurrent = false;
                 ProgramTitle.IsCurrent = true;
-
                 ChangeView(ProgramContentView);
             };
-
             ProgramCloseButton.OnPressed += _ =>
             {
                 HideProgramHeader();
                 ToHomeScreen();
             };
 
-            PdaOwnerButton.OnPressed += _ =>
-            {
-                _clipboard.SetText(_pdaOwner);
-            };
-
-            IdInfoButton.OnPressed += _ =>
-            {
-                _clipboard.SetText(_owner + ", " + _jobTitle);
-            };
-
-            StationNameButton.OnPressed += _ =>
-            {
-                _clipboard.SetText(_stationName);
-            };
-
-            StationAlertLevelButton.OnPressed += _ =>
-            {
-                _clipboard.SetText(_alertLevel);
-            };
-
-            // Frontier
-            BalanceButton.OnPressed += _ =>
-            {
-                _clipboard.SetText(_balance);
-            };
-            ShuttleDeedButton.OnPressed += _ =>
-            {
-                _clipboard.SetText(_shuttleDeed);
-            };
-            // End Frontier
-
+            PdaOwnerButton.OnPressed += _ => _clipboard.SetText(_pdaOwner);
+            IdInfoButton.OnPressed += _ => _clipboard.SetText(_owner + ", " + _jobTitle);
+            StationNameButton.OnPressed += _ => _clipboard.SetText(_stationName);
+            StationAlertLevelButton.OnPressed += _ => _clipboard.SetText(_alertLevel);
+            BalanceButton.OnPressed += _ => _clipboard.SetText(_balance);
+            ShuttleDeedButton.OnPressed += _ => _clipboard.SetText(_shuttleDeed);
             StationTimeButton.OnPressed += _ =>
             {
                 var stationTime = _gameTiming.CurTime.Subtract(_gameTicker.RoundStartTimeSpan);
-                _clipboard.SetText((stationTime.ToString("hh\\:mm\\:ss")));
+                _clipboard.SetText(stationTime.ToString("hh\\:mm\\:ss"));
             };
-
-            StationAlertLevelInstructionsButton.OnPressed += _ =>
-            {
-                _clipboard.SetText(_instructions);
-            };
-
-            // Begin DeltaV additions
-            CurrentDateButton.OnPressed += _ =>
-            {
-                _clipboard.SetText(_currentDate);
-            };
-            // End DeltaV additions
+            StationAlertLevelInstructionsButton.OnPressed += _ => _clipboard.SetText(_instructions);
+            CurrentDateButton.OnPressed += _ => _clipboard.SetText(_currentDate);
 
             HideAllViews();
             ToHomeScreen();
@@ -155,13 +145,12 @@ namespace Content.Client.PDA
 
         public void UpdateState(PdaUpdateState state)
         {
+            _lastOrganizationState = state;
             FlashLightToggleButton.IsActive = state.FlashlightEnabled;
 
             if (state.PdaOwnerInfo.ActualOwnerName != null)
             {
                 _pdaOwner = state.PdaOwnerInfo.ActualOwnerName;
-
-                // Check if we have company information to display
                 if (!string.IsNullOrWhiteSpace(state.PdaOwnerInfo.CompanyName))
                 {
                     PdaOwnerLabel.SetMarkup(Loc.GetString("comp-pda-ui-owner-with-company",
@@ -181,14 +170,11 @@ namespace Content.Client.PDA
                 PdaOwnerLabel.Visible = false;
             }
 
-
             if (state.PdaOwnerInfo.IdOwner != null || state.PdaOwnerInfo.JobTitle != null)
             {
                 _owner = state.PdaOwnerInfo.IdOwner ?? Loc.GetString("comp-pda-ui-unknown");
                 _jobTitle = state.PdaOwnerInfo.JobTitle ?? Loc.GetString("comp-pda-ui-unassigned");
-                IdInfoLabel.SetMarkup(Loc.GetString("comp-pda-ui",
-                    ("owner", _owner),
-                    ("jobTitle", _jobTitle)));
+                IdInfoLabel.SetMarkup(Loc.GetString("comp-pda-ui", ("owner", _owner), ("jobTitle", _jobTitle)));
             }
             else
             {
@@ -196,31 +182,24 @@ namespace Content.Client.PDA
             }
 
             _stationName = state.StationName ?? Loc.GetString("comp-pda-ui-unknown");
-            StationNameLabel.SetMarkup(Loc.GetString("comp-pda-ui-station",
-                ("station", _stationName)));
+            StationNameLabel.SetMarkup(Loc.GetString("comp-pda-ui-station", ("station", _stationName)));
 
-            _balance = BankSystemExtensions.ToSpesoString(state.Balance); // Frontier
-            BalanceLabel.SetMarkup(Loc.GetString("comp-pda-ui-balance", ("balance", _balance))); // Frontier
+            _balance = BankSystemExtensions.ToSpesoString(state.Balance);
+            BalanceLabel.SetMarkup(Loc.GetString("comp-pda-ui-balance", ("balance", _balance)));
 
-            _shuttleDeed = state.OwnedShipName ?? ""; // Frontier
-            ShuttleDeedLabel.SetMarkup(Loc.GetString("comp-pda-ui-shuttle-deed", ("shipname", _shuttleDeed))); // Frontier
-            ShuttleDeedLabel.Visible = !string.IsNullOrEmpty(state.OwnedShipName); // Frontier
+            _shuttleDeed = state.OwnedShipName ?? string.Empty;
+            ShuttleDeedLabel.SetMarkup(Loc.GetString("comp-pda-ui-shuttle-deed", ("shipname", _shuttleDeed)));
+            ShuttleDeedLabel.Visible = !string.IsNullOrEmpty(state.OwnedShipName);
 
             var stationTime = _gameTiming.CurTime.Subtract(_gameTicker.RoundStartTimeSpan);
+            StationTimeLabel.SetMarkup(Loc.GetString("comp-pda-ui-station-time", ("time", stationTime.ToString("hh\\:mm\\:ss"))));
 
-            StationTimeLabel.SetMarkup(Loc.GetString("comp-pda-ui-station-time",
-                ("time", stationTime.ToString("hh\\:mm\\:ss"))));
-
-            // Frontier
             if (state.RoundEndTime is not null)
             {
-                // Synchronise ticking of the seconds place of the shift time and the roundend time
                 _roundEndTime = TimeSpan.FromSeconds(Math.Floor(state.RoundEndTime.Value.TotalSeconds))
-                                        .Add(TimeSpan.FromMilliseconds(_gameTicker.RoundStartTimeSpan.Milliseconds));
-
+                    .Add(TimeSpan.FromMilliseconds(_gameTicker.RoundStartTimeSpan.Milliseconds));
                 var remainingTime = _roundEndTime.Value.Subtract(_gameTiming.CurTime);
-                RemainingTimeLabel.SetMarkup(Loc.GetString("comp-pda-ui-remaining-time",
-                    ("time", remainingTime.ToString("hh\\:mm\\:ss"))));
+                RemainingTimeLabel.SetMarkup(Loc.GetString("comp-pda-ui-remaining-time", ("time", remainingTime.ToString("hh\\:mm\\:ss"))));
             }
             else
             {
@@ -228,34 +207,22 @@ namespace Content.Client.PDA
             }
 
             RemainingTimeLabel.Visible = _roundEndTime is not null;
-            // End Frontier
 
             var alertLevel = state.PdaOwnerInfo.StationAlertLevel;
             var alertColor = state.PdaOwnerInfo.StationAlertColor;
             var alertLevelKey = alertLevel != null ? $"alert-level-{alertLevel}" : "alert-level-unknown";
             _alertLevel = Loc.GetString(alertLevelKey);
-
-            StationAlertLevelLabel.SetMarkup(Loc.GetString(
-                "comp-pda-ui-station-alert-level",
-                ("color", alertColor),
-                ("level", _alertLevel)
-            ));
+            StationAlertLevelLabel.SetMarkup(Loc.GetString("comp-pda-ui-station-alert-level", ("color", alertColor), ("level", _alertLevel)));
             _instructions = Loc.GetString($"{alertLevelKey}-instructions");
-            StationAlertLevelInstructions.SetMarkup(Loc.GetString(
-                "comp-pda-ui-station-alert-level-instructions",
-                ("instructions", _instructions))
-            );
-            // Begin DeltaV additions
+            StationAlertLevelInstructions.SetMarkup(Loc.GetString("comp-pda-ui-station-alert-level-instructions", ("instructions", _instructions)));
+
             if (state.PdaOwnerInfo.CurrentDate is { } curDate)
+            {
                 _currentDate = curDate.ToString("dd MMMM yyyy");
-                CurrentDateLabel.SetMarkup(Loc.GetString(
-                    "comp-pda-ui-current-date",
-                    ("date", _currentDate)
-                ));
-            // End DeltaV additions
+                CurrentDateLabel.SetMarkup(Loc.GetString("comp-pda-ui-current-date", ("date", _currentDate)));
+            }
 
             AddressLabel.Text = state.Address?.ToUpper() ?? " - ";
-
             EjectIdButton.IsActive = state.PdaOwnerInfo.IdOwner != null || state.PdaOwnerInfo.JobTitle != null;
             EjectPenButton.IsActive = state.HasPen;
             EjectPaiButton.IsActive = state.HasPai;
@@ -268,38 +235,27 @@ namespace Content.Client.PDA
         {
             ProgramList.RemoveAllChildren();
 
-            if (programs.Count == 0)
-            {
-                ProgramList.AddChild(new Label()
-                {
-                    Text = Loc.GetString("comp-pda-io-no-programs-available"),
-                    HorizontalAlignment = HAlignment.Center,
-                    VerticalAlignment = VAlignment.Center,
-                    VerticalExpand = true
-                });
-
-                return;
-            }
-
             var row = CreateProgramListRow();
-            var itemCount = 1;
+            var itemCount = 0;
             ProgramList.AddChild(row);
 
             foreach (var (uid, component) in programs)
             {
-                //Create a new row every second program item starting from the first
-                if (itemCount % 2 != 0)
+                if (itemCount > 0 && itemCount % 2 == 0)
                 {
                     row = CreateProgramListRow();
                     ProgramList.AddChild(row);
                 }
 
                 var item = new PdaProgramItem();
-
                 if (component.Icon is not null)
                     item.Icon.SetFromSpriteSpecifier(component.Icon);
 
-                item.OnPressed += _ => OnProgramItemPressed?.Invoke(uid);
+                item.OnPressed += _ =>
+                {
+                    _organizationProgramActive = false;
+                    OnProgramItemPressed?.Invoke(uid);
+                };
 
                 switch (component.InstallationStatus)
                 {
@@ -318,31 +274,474 @@ namespace Content.Client.PDA
                 item.ProgramName.Text = Loc.GetString(component.ProgramName);
                 item.SetHeight = 20;
                 row.AddChild(item);
-
                 itemCount++;
             }
 
-            //Add a filler item to the last row when it only contains one item
-            if (itemCount % 2 == 0)
-                row.AddChild(new Control() { HorizontalExpand = true });
+            if (itemCount > 0 && itemCount % 2 == 0)
+            {
+                row = CreateProgramListRow();
+                ProgramList.AddChild(row);
+            }
+
+            var organizationItem = new PdaProgramItem();
+            organizationItem.ProgramName.Text = "Організація";
+            organizationItem.Icon.SetFromSpriteSpecifier(
+                new SpriteSpecifier.Texture(new("/Textures/_Aspis/Interface/Organization/icon_pda.png")));
+            organizationItem.BackgroundColor = _organizationButtonColor;
+            organizationItem.OnPressed += _ =>
+            {
+                if (_organizationPage == 2)
+                    _quotaPda.RequestSnapshot();
+                ShowOrganizationProgram();
+            };
+            row.AddChild(organizationItem);
+            itemCount++;
+
+            if (itemCount == 0)
+            {
+                ProgramList.AddChild(new Label
+                {
+                    Text = "Програм поки немає.",
+                    HorizontalAlignment = HAlignment.Center,
+                    VerticalAlignment = VAlignment.Center,
+                    VerticalExpand = true
+                });
+            }
+            else if (itemCount % 2 != 0)
+            {
+                row.AddChild(new Control { HorizontalExpand = true });
+            }
         }
 
-        /// <summary>
-        /// Changes the current view to the home screen (view 0) and sets the tabs `IsCurrent` flag accordingly
-        /// </summary>
+        // Labels in the PDA do not automatically wrap long plain strings.
+        // This is presentation-only; the complete message remains on the client.
+        private static string WrapOrganizationQuotaDescription(string text, int width = 35)
+        {
+            var result = new System.Text.StringBuilder();
+            foreach (var paragraph in text.Replace("\r", "").Split('\n'))
+            {
+                var column = 0;
+                foreach (var word in paragraph.Split(' ', StringSplitOptions.RemoveEmptyEntries))
+                {
+                    if (column > 0 && column + word.Length + 1 > width)
+                    {
+                        result.Append('\n');
+                        column = 0;
+                    }
+                    else if (column > 0)
+                    {
+                        result.Append(' ');
+                        column++;
+                    }
+                    result.Append(word);
+                    column += word.Length;
+                }
+                result.Append('\n');
+            }
+            return result.ToString().TrimEnd();
+        }
+
+        private void ShowOrganizationProgram()
+        {
+            ProgramView.RemoveAllChildren();
+            var state = _lastOrganizationState;
+            var scroll = new ScrollContainer
+            {
+                HorizontalExpand = true,
+                VerticalExpand = true,
+                HScrollEnabled = false
+            };
+            var root = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Vertical,
+                HorizontalExpand = true,
+                SeparationOverride = 9,
+                Margin = new Thickness(12)
+            };
+            scroll.AddChild(root);
+            ProgramView.AddChild(scroll);
+            _organizationScroll = scroll;
+
+            if (state == null || string.IsNullOrWhiteSpace(state.PdaOwnerInfo.OrganizationName))
+            {
+                root.AddChild(new Label
+                {
+                    Text = "Організація не вибрана",
+                    FontColorOverride = Color.FromHex("#D8E3EE")
+                });
+                root.AddChild(new Label
+                {
+                    Text = "Зареєструйте організацію або вступіть до наявної через консоль.",
+                    HorizontalExpand = true
+                });
+                ToProgramView("Організація");
+                _organizationProgramActive = true;
+                return;
+            }
+
+            var orgName = state.PdaOwnerInfo.OrganizationName!;
+            var orgRole = state.PdaOwnerInfo.OrganizationRole ?? "Учасник";
+            var orgColor = state.PdaOwnerInfo.OrganizationColor;
+            var header = new PanelContainer
+            {
+                PanelOverride = new StyleBoxFlat
+                {
+                    BackgroundColor = new Color(orgColor.R, orgColor.G, orgColor.B, 0.18f)
+                },
+                HorizontalExpand = true
+            };
+            var headerBody = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Vertical,
+                Margin = new Thickness(10),
+                SeparationOverride = 4
+            };
+            headerBody.AddChild(new Label { Text = orgName, FontColorOverride = orgColor });
+            headerBody.AddChild(new Label { Text = orgRole, FontColorOverride = Color.White });
+            header.AddChild(headerBody);
+            root.AddChild(header);
+
+            var navigation = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Horizontal,
+                HorizontalExpand = true,
+                SeparationOverride = 5
+            };
+            var profile = new Button
+            {
+                Text = "Профіль",
+                HorizontalExpand = true,
+                Modulate = _organizationPage == 0 ? Color.FromHex("#A7DDA9") : Color.White
+            };
+            profile.OnPressed += _ =>
+            {
+                _organizationPage = 0;
+                ShowOrganizationProgram();
+            };
+            var roster = new Button
+            {
+                Text = "Учасники",
+                HorizontalExpand = true,
+                Modulate = _organizationPage == 1 ? Color.FromHex("#A7DDA9") : Color.White
+            };
+            roster.OnPressed += _ =>
+            {
+                _organizationPage = 1;
+                ShowOrganizationProgram();
+            };
+            var quotas = new Button
+            {
+                Text = "Квоти",
+                HorizontalExpand = true,
+                Modulate = _organizationPage == 2 ? Color.FromHex("#A7DDA9") : Color.White
+            };
+            quotas.OnPressed += _ =>
+            {
+                _organizationPage = 2;
+                _quotaPda.RequestSnapshot();
+                ShowOrganizationProgram();
+            };
+            navigation.AddChild(profile);
+            navigation.AddChild(roster);
+            navigation.AddChild(quotas);
+            root.AddChild(navigation);
+
+            if (_organizationPage == 2)
+            {
+                var refresh = new Button { Text = "Оновити завдання", HorizontalExpand = true };
+                refresh.OnPressed += _ => _quotaPda.RequestSnapshot();
+                root.AddChild(refresh);
+                var snapshot = _quotaPda.LastSnapshot;
+                if (snapshot == null || !string.Equals(snapshot.OrganizationName,
+                        orgName, StringComparison.Ordinal))
+                {
+                    root.AddChild(new Label { Text = "Отримання завдань організації...",
+                        FontColorOverride = Color.FromHex("#B3C6D4") });
+                }
+                else if (snapshot.Quotas.Length == 0)
+                {
+                    root.AddChild(new Label { Text = "Наразі компанія не має прийнятих квот.",
+                        FontColorOverride = Color.FromHex("#B3C6D4") });
+                }
+                else
+                {
+                    foreach (var job in snapshot.Quotas)
+                    {
+                        var color = job.AssignedToMe ? Color.FromHex("#A5E0B0") :
+                            Color.FromHex("#B0B9C4");
+                        var panel = new PanelContainer
+                        {
+                            HorizontalExpand = true,
+                            PanelOverride = new StyleBoxFlat
+                            {
+                                BackgroundColor = job.AssignedToMe ? Color.FromHex("#283B2E") :
+                                    Color.FromHex("#202831")
+                            }
+                        };
+                        var content = new BoxContainer
+                        {
+                            Orientation = LayoutOrientation.Vertical,
+                            Margin = new Thickness(10),
+                            SeparationOverride = 5
+                        };
+                        content.AddChild(new Label
+                        {
+                            Text = job.SettlementPending ? "✓ ДОСТАВЛЕНО. ОЧІКУЄ ВИПЛАТИ" :
+                                job.Completed ? "✓ ВИКОНАНО" :
+                                job.AssignedToMe ? "★ МОЄ ЗАВДАННЯ" : "Завдання компанії",
+                            FontColorOverride = color
+                        });
+                        content.AddChild(new Label { Text = job.Title, FontColorOverride = Color.White });
+                        var factionField = job.IsFactionTask && !job.IsWreckSurvey;
+                        var isCargoDelivery = job.Workflow.Contains("Cargo Requests", StringComparison.Ordinal);
+                        var isCargoExport = job.Workflow.StartsWith("Експорт", StringComparison.Ordinal) ||
+                            job.Workflow.StartsWith("Постачання будівельних", StringComparison.Ordinal);
+                        if (job.IsFactionTask)
+                            OrganizationFactionStepUi.AddTo(content, job.FactionSteps, job.Code,
+                                _expandedOrganizationStepLists, _expandedOrganizationStepDetails, true);
+                        var expanded = _expandedOrganizationQuota == job.Code;
+                        var expand = new Button { Text = job.IsFactionTask
+                            ? expanded ? "Згорнути загальні відомості" : "Загальні відомості"
+                            : expanded ? "Згорнути подробиці" : "Докладніше про завдання" };
+                        var expandCode = job.Code;
+                        expand.OnPressed += _ =>
+                        {
+                            _expandedOrganizationQuota = expanded ? string.Empty : expandCode;
+                            ShowOrganizationProgram();
+                        };
+                        content.AddChild(expand);
+                        if (expanded)
+                        {
+                        if (!job.IsFactionTask && !string.IsNullOrWhiteSpace(job.ProductionRequirements))
+                            content.AddChild(new Label
+                            {
+                                Text = WrapOrganizationQuotaDescription(job.ProductionRequirements),
+                                FontColorOverride = Color.FromHex("#BACBD6")
+                            });
+                        content.AddChild(new Label { Text = $"Код: {job.Code}" });
+                        content.AddChild(new Label { Text = $"Виконавець: {job.Assignee}" });
+                        content.AddChild(new Label { Text =
+                            $"Складність: {new string('★', Math.Clamp(job.Difficulty, 1, 4))}" });
+                        if (job.Workflow.Contains("Cargo Requests", StringComparison.Ordinal))
+                            content.AddChild(new Label { Text = "Пункт отримання: Trade Mall" });
+                        else
+                            content.AddChild(new Label { Text = job.Workflow });
+                        var medicalQuota = job.Workflow.StartsWith("Медична допомога", StringComparison.Ordinal);
+                        content.AddChild(new Label { Text = job.IsWreckSurvey
+                            ? $"Архівування: {job.Delivered}/{job.Total}"
+                            : factionField ? $"Етапи: {job.Delivered}/{job.Total}"
+                            : medicalQuota ? $"Вилікувано: {job.Delivered}/{job.Total} пацієнтів"
+                            : $"Підтверджено: {job.Delivered}/{job.Total} ящиків" });
+                        content.AddChild(new Label { Text = $"Термін: {job.TimeLimitMinutes} хв" });
+                        if (medicalQuota && !job.Completed)
+                            content.AddChild(new Label { Text =
+                                "Допоможіть іншому пацієнту лікувальним засобом. Самолікування не враховується.",
+                                FontColorOverride = Color.FromHex("#A4BDCA") });
+                        if (isCargoDelivery)
+                            content.AddChild(new Label { Text =
+                                $"Замовлено через карго: {job.CargoRequestedCrates}/{job.Total} ящиків" });
+                        var pharmaceutical = job.Workflow.StartsWith("Експорт фармацевтичної", StringComparison.Ordinal);
+                        if (pharmaceutical)
+                        {
+                            var destination = Array.FindIndex(job.PostTargets, amount => amount > 0);
+                            if (destination >= 0)
+                                content.AddChild(new Label { Text =
+                                    $"Пункт здачі: торговий пост {(char)('A' + destination)}" });
+                            if (job.RejectedShipments > 0)
+                                content.AddChild(new Label { Text =
+                                    $"Відхилено партій: {job.RejectedShipments}",
+                                    FontColorOverride = Color.FromHex("#E3A488") });
+                            if (!string.IsNullOrWhiteSpace(job.LastInspectionReport))
+                            {
+                                content.AddChild(new Label { Text =
+                                    $"Перевірка: {job.LastInspectionReport}",
+                                    FontColorOverride = Color.FromHex("#BAD6C8") });
+                                if (job.Delivered > 0)
+                                    content.AddChild(new Label { Text =
+                                        $"Середня якість прийнятого: {job.QualityPercent}%" });
+                            }
+                        }
+                        } // expandable details
+                        if (job.IsFactionTask &&
+                            job.AssignedToMe && !job.RouteClosed && !job.TravelVisited &&
+                            job.SecondsRemaining > 0)
+                        {
+                            var coordinateCode = job.Code;
+                            var disk = new Button
+                            {
+                                Text = job.CoordinatesIssued ? "Перевидати диск координат" : "Надрукувати диск координат",
+                                ToolTip = "Потрібен для польоту з Trade Mall. Повторний друк анулює попередній диск."
+                            };
+                            disk.OnPressed += _ => _quotaPda.PrintCoordinatesDisk(coordinateCode);
+                            content.AddChild(disk);
+                        }
+                        if (job.IsFactionTask && job.TravelVisited && !job.RouteClosed)
+                            content.AddChild(new Label
+                            {
+                                Text = "Маршрут використано. Повторний друк диска після прибуття недоступний.",
+                                FontColorOverride = Color.FromHex("#AEBFC8")
+                            });
+                        if ((isCargoDelivery || isCargoExport ||
+                             (factionField && job.FactionKitCanPrint)) &&
+                            job.AssignedToMe && !job.Completed &&
+                            job.SecondsRemaining > 0 && (!isCargoDelivery || job.CargoRequestedCrates < job.Total))
+                        {
+                            var chip = new Button
+                            {
+                                Text = factionField ? "Надрукувати накладну на комплект" : "Друк накладної",
+                                ToolTip = factionField ? "Вставте накладну в Cargo Requests на Trade Mall. " +
+                                    "Комплект прибуде після схвалення замовлення карго." :
+                                    isCargoDelivery ? "Вставте накладну в Cargo Requests на Trade Mall"
+                                    : "Прикріпіть накладну до ящика та здайте через Cargo"
+                            };
+                            var quotaCode = job.Code;
+                            chip.OnPressed += _ => _quotaPda.PrintCargoChip(quotaCode);
+                            content.AddChild(chip);
+                        }
+                        if (factionField && job.FactionKitOrdered)
+                            content.AddChild(new Label { Text = job.FactionKitCanPrint
+                                ? "Можна оформити повторну накладну для втраченого комплекту."
+                                : "Комплект замовлено через Cargo Requests (Trade Mall)." });
+                        content.AddChild(new Label { Text = job.SettlementPending
+                            ? "Доставку підтверджено. Виплата очікує фінансового ліміту."
+                            : job.Completed ? (factionField ? "Сигнал прийнято, авторитет нараховано" : "Винагорода зарахована") :
+                            $"Залишилося: {job.SecondsRemaining / 60} хв {job.SecondsRemaining % 60} с" });
+                        if (job.Workflow.Contains("A-D", StringComparison.Ordinal))
+                        {
+                            for (var post = 0; post < 4; post++)
+                            {
+                                if (job.PostTargets[post] == 0)
+                                    continue;
+                                content.AddChild(new Label { Text =
+                                    $"Пост {(char)('A' + post)}: {job.Posts[post]}/{job.PostTargets[post]}" });
+                            }
+                        }
+                        var copy = new Button { Text = "Копіювати код замовлення" };
+                        var code = job.Code;
+                        copy.OnPressed += _ => _clipboard.SetText(code);
+                        content.AddChild(copy);
+                        panel.AddChild(content);
+                        root.AddChild(panel);
+                    }
+                }
+            }
+            else if (_organizationPage == 0)
+            {
+                var information = new PanelContainer
+                {
+                    HorizontalExpand = true,
+                    PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex("#20282F") }
+                };
+                var infoContent = new BoxContainer
+                {
+                    Orientation = LayoutOrientation.Vertical,
+                    HorizontalExpand = true,
+                    Margin = new Thickness(9),
+                    SeparationOverride = 8
+                };
+                infoContent.AddChild(new Label { Text = "Особисті відомості", FontColorOverride = Color.FromHex("#C7D7E6") });
+                infoContent.AddChild(new Label { Text = $"Посада: {orgRole}" });
+                infoContent.AddChild(new Label { Text = $"Учасників у доступному списку: {state.OrganizationMembers.Length}" });
+                var actions = new BoxContainer
+                {
+                    Orientation = LayoutOrientation.Horizontal,
+                    HorizontalExpand = true,
+                    SeparationOverride = 5
+                };
+                var copyName = new Button { Text = "Копіювати назву", HorizontalExpand = true };
+                copyName.OnPressed += _ => _clipboard.SetText(orgName);
+                actions.AddChild(copyName);
+                var copyRole = new Button { Text = "Копіювати посаду", HorizontalExpand = true };
+                copyRole.OnPressed += _ => _clipboard.SetText(orgRole);
+                actions.AddChild(copyRole);
+                infoContent.AddChild(actions);
+                information.AddChild(infoContent);
+                root.AddChild(information);
+            }
+            else
+            {
+                var members = state.OrganizationMembers;
+                var tools = new BoxContainer
+                {
+                    Orientation = LayoutOrientation.Horizontal,
+                    HorizontalExpand = true,
+                    SeparationOverride = 6
+                };
+                var search = new LineEdit
+                {
+                    PlaceHolder = "Пошук учасника",
+                    Text = _organizationMemberFilter,
+                    HorizontalExpand = true
+                };
+                var memberList = new BoxContainer
+                {
+                    Orientation = LayoutOrientation.Vertical,
+                    HorizontalExpand = true,
+                    SeparationOverride = 5
+                };
+                var foundCount = new Label { FontColorOverride = Color.FromHex("#AAB7C5") };
+                void RefreshMembers(string query)
+                {
+                    memberList.RemoveAllChildren();
+                    var count = 0;
+                    foreach (var member in members)
+                    {
+                        if (!string.IsNullOrWhiteSpace(query) &&
+                            !member.Contains(query, StringComparison.OrdinalIgnoreCase))
+                            continue;
+                        count++;
+                        var item = new Button
+                        {
+                            Text = member,
+                            HorizontalExpand = true,
+                            ToolTip = "Копіювати ім'я"
+                        };
+                        var name = member;
+                        item.OnPressed += _ => _clipboard.SetText(name);
+                        memberList.AddChild(item);
+                    }
+                    foundCount.Text = string.IsNullOrWhiteSpace(query)
+                        ? $"Учасників: {members.Length}"
+                        : $"Знайдено: {count} з {members.Length}";
+                    if (count == 0)
+                        memberList.AddChild(new Label
+                        {
+                            Text = members.Length == 0 ? "Список учасників недоступний" : "Нічого не знайдено",
+                            FontColorOverride = Color.FromHex("#AAB7C5")
+                        });
+                }
+                search.OnTextChanged += _ =>
+                {
+                    _organizationMemberFilter = search.Text;
+                    RefreshMembers(_organizationMemberFilter);
+                };
+                tools.AddChild(search);
+                var clearSearch = new Button { Text = "×", MinWidth = 28, ToolTip = "Очистити пошук" };
+                clearSearch.OnPressed += _ => search.Text = string.Empty;
+                tools.AddChild(clearSearch);
+                var copyMembers = new Button { Text = "Копіювати", Disabled = members.Length == 0 };
+                copyMembers.OnPressed += _ => _clipboard.SetText(string.Join("\n", members));
+                tools.AddChild(copyMembers);
+                root.AddChild(tools);
+                root.AddChild(foundCount);
+                RefreshMembers(_organizationMemberFilter);
+                root.AddChild(memberList);
+            }
+
+            ToProgramView("Організація");
+            _organizationProgramActive = true;
+        }
+
         public void ToHomeScreen()
         {
+            _organizationProgramActive = false;
             HomeButton.IsCurrent = true;
             ProgramListButton.IsCurrent = false;
             SettingsButton.IsCurrent = false;
             ProgramTitle.IsCurrent = false;
-
             ChangeView(HomeView);
         }
 
-        /// <summary>
-        /// Hides the program title and close button.
-        /// </summary>
         public void HideProgramHeader()
         {
             ProgramTitle.IsCurrent = false;
@@ -352,29 +751,21 @@ namespace Content.Client.PDA
             SettingsButton.Visible = true;
         }
 
-        /// <summary>
-        /// Changes the current view to the program content view (view 3), sets the program title and sets the tabs `IsCurrent` flag accordingly
-        /// </summary>
         public void ToProgramView(string title)
         {
+            _organizationProgramActive = false;
             HomeButton.IsCurrent = false;
             ProgramListButton.IsCurrent = false;
             SettingsButton.IsCurrent = false;
-            ProgramTitle.IsCurrent = false;
             ProgramTitle.IsCurrent = true;
             ProgramTitle.Visible = true;
             ProgramCloseButton.Visible = true;
             ProgramListButton.Visible = false;
             SettingsButton.Visible = false;
-
             ProgramTitle.LabelText = title;
             ChangeView(ProgramContentView);
         }
 
-
-        /// <summary>
-        /// Changes the current view to the given view number
-        /// </summary>
         public void ChangeView(int view)
         {
             if (ViewContainer.ChildCount <= view)
@@ -387,20 +778,13 @@ namespace Content.Client.PDA
 
         private static BoxContainer CreateProgramListRow()
         {
-            return new BoxContainer()
-            {
-                Orientation = BoxContainer.LayoutOrientation.Horizontal,
-                HorizontalExpand = true
-            };
+            return new BoxContainer { Orientation = LayoutOrientation.Horizontal, HorizontalExpand = true };
         }
 
         private void HideAllViews()
         {
-            var views = ViewContainer.Children;
-            foreach (var view in views)
-            {
+            foreach (var view in ViewContainer.Children)
                 view.Visible = false;
-            }
         }
 
         protected override void Draw(DrawingHandleScreen handle)
@@ -408,22 +792,13 @@ namespace Content.Client.PDA
             base.Draw(handle);
 
             var stationTime = _gameTiming.CurTime.Subtract(_gameTicker.RoundStartTimeSpan);
+            StationTimeLabel.SetMarkup(Loc.GetString("comp-pda-ui-station-time", ("time", stationTime.ToString("hh\\:mm\\:ss"))));
 
-            StationTimeLabel.SetMarkup(Loc.GetString("comp-pda-ui-station-time",
-                ("time", stationTime.ToString("hh\\:mm\\:ss"))));
-
-            // Frontier
             if (_roundEndTime is not null)
             {
                 var remainingTime = _roundEndTime.Value.Subtract(_gameTiming.CurTime);
-                RemainingTimeLabel.SetMarkup(Loc.GetString("comp-pda-ui-remaining-time",
-                    ("time", remainingTime.ToString("hh\\:mm\\:ss"))));
-                if (remainingTime < TimeSpan.Zero){
-                    RemainingTimeLabel.Visible = false;
-                    _roundEndTime = null;
-                }
+                RemainingTimeLabel.SetMarkup(Loc.GetString("comp-pda-ui-remaining-time", ("time", remainingTime.ToString("hh\\:mm\\:ss"))));
             }
-            // End Frontier
         }
     }
 }

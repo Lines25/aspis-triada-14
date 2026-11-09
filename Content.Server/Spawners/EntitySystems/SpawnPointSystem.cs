@@ -1,3 +1,4 @@
+using Content.Server._Aspis.Organizations;
 using Content.Server.GameTicking;
 using Content.Server.Spawners.Components;
 using Content.Server.Station.Systems;
@@ -21,6 +22,10 @@ public sealed partial class SpawnPointSystem : EntitySystem
     private void OnPlayerSpawning(PlayerSpawningEvent args)
     {
         if (args.SpawnResult != null)
+            return;
+        // Corporate stations use only inspected, role-scoped beacons. Never
+        // fall back to unrelated station spawn points when no marker exists.
+        if (EntityManager.System<OrganizationSystem>().TrySpawnOnOrganizationOutpost(args))
             return;
 
         // TODO: Cache all this if it ends up important.

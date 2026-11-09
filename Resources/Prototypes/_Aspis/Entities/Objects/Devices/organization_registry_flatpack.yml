@@ -1,0 +1,14 @@
+- type: entity
+  parent: BaseNFFlatpack
+  id: ComputerOrganizationRegistryFlatpack
+  name: пакунок консолі організацій
+  description: Компактний набір для розгортання консолі реєстрації та керування організацією.
+  components:
+  - type: Flatpack
+    entity: ComputerOrganizationRegistry
+  - type: StaticPrice
+    price: 4000
+    vendPrice: 10000
+  - type: Sprite
+    layers:
+    - state: science_console

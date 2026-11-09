@@ -1,4 +1,5 @@
 using System.Globalization;
+using Content.Server._Aspis.Organizations;
 using System.Linq;
 using System.Numerics;
 using Content.Server.Administration.Managers;
@@ -51,6 +52,10 @@ namespace Content.Server.GameTicking
             var query = EntityQueryEnumerator<StationJobsComponent, StationSpawningComponent>();
             while (query.MoveNext(out var uid, out _, out _))
             {
+                // A corporate station is only selected by the explicit,
+                // membership-checked flow below, never by the random allocator.
+                if (HasComp<OrganizationOutpostStationComponent>(uid))
+                    continue;
                 spawnableStations.Add(uid);
             }
 
@@ -87,7 +92,38 @@ namespace Content.Server.GameTicking
             }
 
             var spawnableStations = GetSpawnableStations();
+            // Explicit corporate preferences are considered independently of the
+            // normal job allocator. It must never randomly assign an unverified
+            // player to a company station, and must never receive a player twice.
+            var proposedCorporate = new Dictionary<NetUserId, EntityUid>();
+            var outposts = EntityManager.System<OrganizationSystem>();
+            foreach (var (user, profile) in profiles)
+            {
+                if (!_playerManager.TryGetSessionById(user, out var session) || session == null ||
+                    !outposts.TryGetPreferredRoundStartOutpost(session, profile, out var corporateStation))
+                    continue;
+                var bans = _banManager.GetJobBans(user);
+                if (bans == null || bans.Contains("Contractor"))
+                    continue;
+                var permitted = new IsJobAllowedEvent(session, new ProtoId<JobPrototype>("Contractor"));
+                RaiseLocalEvent(ref permitted);
+                if (permitted.Cancelled)
+                    continue;
+                proposedCorporate[user] = corporateStation;
+            }
+
+            // Keep ordinary assignments as the fallback even for players who
+            // requested an outpost. A full/missing outpost must never strand
+            // the character or silently ignore their normal job preferences.
             var assignedJobs = _stationJobs.AssignJobs(profiles, spawnableStations);
+            foreach (var (user, station) in proposedCorporate)
+            {
+                // AssignJobs only simulates ordinary job allocation; it does
+                // not consume station slots. Replace the proposed assignment
+                // only if a REAL corporate Contractor slot was reserved.
+                if (_stationJobs.TryAssignJob(station, "Contractor", user))
+                    assignedJobs[user] = (new ProtoId<JobPrototype>("Contractor"), station);
+            }
 
             _stationJobs.AssignOverflowJobs(ref assignedJobs, playerNetIds, profiles, spawnableStations);
 
@@ -102,7 +138,10 @@ namespace Content.Server.GameTicking
                 }
                 else
                 {
-                    stationJobCounts[station] += 1;
+                    // Corporate slots have their own capacity; do not include
+                    // them in the sector's extended-access calculation.
+                    if (stationJobCounts.ContainsKey(station))
+                        stationJobCounts[station] += 1;
                 }
             }
 
@@ -211,6 +250,19 @@ namespace Content.Server.GameTicking
 
                 _chatManager.DispatchServerMessage(player,
                     Loc.GetString("game-ticker-player-no-jobs-available-when-joining"));
+                return;
+            }
+
+            // Do not create a mind, consume a station slot or send a visitor
+            // into a restricted corporate station if its role-scoped beacon
+            // does not pass a fresh server-side validation.
+            if (HasComp<OrganizationOutpostStationComponent>(station) &&
+                (jobId != "Contractor" ||
+                 !EntityManager.System<OrganizationSystem>().CanJoinOrganizationOutpost(
+                     station, player, character)))
+            {
+                _chatManager.DispatchServerMessage(player,
+                    "Корпоративний аванпост зараз не має доступної безпечної точки появи для цього персонажа.");
                 return;
             }
 

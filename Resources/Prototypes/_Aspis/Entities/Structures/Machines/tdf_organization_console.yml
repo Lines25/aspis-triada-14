@@ -1,0 +1,9 @@
+# Dedicated TDF organization and oversight console. Not available to regular companies.
+- type: entity
+  id: ComputerTdfOrganizationConsole
+  parent: ComputerOrganizationRegistry
+  name: консоль управління TDF
+  description: Кадровий облік, службовий фонд і ринковий нагляд сектора.
+  components:
+  - type: AccessReader
+    access: [["TdfChiefEnforcer"], ["TdfLieutenant"], ["TdfPatrolTeamLeader"], ["GeneralTdfAccessBrig"]]

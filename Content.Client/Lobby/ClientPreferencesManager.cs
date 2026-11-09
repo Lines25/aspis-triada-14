@@ -1,3 +1,4 @@
+using Content.Shared._Aspis.Organizations;
 using System.Linq;
 using Content.Shared._Mono.Company;
 using Content.Shared.Preferences;
@@ -21,6 +22,11 @@ namespace Content.Client.Lobby
         [Dependency] private IPlayerManager _playerManager = default!;
 
         public event Action? OnServerDataLoaded;
+        public event Action<MsgOrganizationProfileResponse>? OnOrganizationProfileReceived;
+        public event Action<MsgOrganizationOutpostLobbyResponse>? OnOrganizationOutpostLobbyReceived;
+        public event Action<MsgOrganizationOutpostDirectoryResponse>? OnOrganizationOutpostDirectoryReceived;
+        public event Action<MsgOrganizationQuotaPdaResponse>? OnOrganizationQuotaPdaReceived;
+        public event Action? OnOrganizationFactionTaskCompleted;
 
         public GameSettings Settings { get; private set; } = default!;
         public PlayerPreferences Preferences { get; private set; } = default!;
@@ -31,6 +37,19 @@ namespace Content.Client.Lobby
             _netManager.RegisterNetMessage<MsgUpdateCharacter>();
             _netManager.RegisterNetMessage<MsgSelectCharacter>();
             _netManager.RegisterNetMessage<MsgDeleteCharacter>();
+            _netManager.RegisterNetMessage<MsgOrganizationProfileRequest>();
+            _netManager.RegisterNetMessage<MsgOrganizationProfileResponse>(HandleOrganizationProfile);
+            _netManager.RegisterNetMessage<MsgOrganizationOutpostLobbyRequest>();
+            _netManager.RegisterNetMessage<MsgOrganizationOutpostLobbyResponse>(HandleOrganizationOutpostLobby);
+            _netManager.RegisterNetMessage<MsgOrganizationOutpostDirectoryRequest>();
+            _netManager.RegisterNetMessage<MsgOrganizationOutpostDirectoryResponse>(HandleOrganizationOutpostDirectory);
+            // Register all organization quota messages before connecting to the server.
+            // EntitySystem.Initialize runs after the network handshake and must not register them.
+            _netManager.RegisterNetMessage<MsgOrganizationQuotaPdaRequest>();
+            _netManager.RegisterNetMessage<MsgOrganizationQuotaPdaResponse>(HandleOrganizationQuotaPda);
+            _netManager.RegisterNetMessage<MsgOrganizationFactionTaskCompleted>(_ => OnOrganizationFactionTaskCompleted?.Invoke());
+            _netManager.RegisterNetMessage<MsgOrganizationQuotaChipPrintRequest>();
+            _netManager.RegisterNetMessage<MsgOrganizationFactionCoordinatesPrintRequest>();
 
             _baseClient.RunLevelChanged += BaseClientOnRunLevelChanged;
         }
@@ -43,6 +62,40 @@ namespace Content.Client.Lobby
                 Preferences = default!;
             }
         }
+
+        public void RequestOrganizationProfile(int slot)
+        {
+            if (Preferences == null || !Preferences.Characters.ContainsKey(slot))
+                return;
+            _netManager.ClientSendMessage(new MsgOrganizationProfileRequest { Slot = slot });
+        }
+
+        private void HandleOrganizationProfile(MsgOrganizationProfileResponse response) =>
+            OnOrganizationProfileReceived?.Invoke(response);
+
+        public void RequestOrganizationOutpostLobby(int slot, bool change = false, bool select = false)
+        {
+            if (Preferences == null || !Preferences.Characters.ContainsKey(slot))
+                return;
+            _netManager.ClientSendMessage(new MsgOrganizationOutpostLobbyRequest
+            {
+                Slot = slot,
+                ChangeSelection = change,
+                SelectCompany = select
+            });
+        }
+
+        public void RequestOrganizationOutpostDirectory() =>
+            _netManager.ClientSendMessage(new MsgOrganizationOutpostDirectoryRequest());
+
+        private void HandleOrganizationOutpostDirectory(MsgOrganizationOutpostDirectoryResponse response) =>
+            OnOrganizationOutpostDirectoryReceived?.Invoke(response);
+
+        private void HandleOrganizationOutpostLobby(MsgOrganizationOutpostLobbyResponse response) =>
+            OnOrganizationOutpostLobbyReceived?.Invoke(response);
+
+        private void HandleOrganizationQuotaPda(MsgOrganizationQuotaPdaResponse response) =>
+            OnOrganizationQuotaPdaReceived?.Invoke(response);
 
         public void SelectCharacter(ICharacterProfile profile)
         {

@@ -1,0 +1,159 @@
+# Dedicated physical assets for faction field activities (v40).
+# The survey marker is intentionally NOT a TelecomServer: uncommissioned
+# equipment must not route radio traffic or behave like a powered machine.
+- type: entity
+  parent: WeaponCaseShortDocuments
+  id: TriadFactionFieldKit
+  name: польовий комплект фракції
+  description: Захищений контейнер із польовим обладнанням для вибору ділянки та підключення ретранслятора.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: OrganizationFactionFieldKit
+
+- type: entity
+  parent: CrateEngineering
+  id: AspisFactionFieldSupplyCrate
+  name: комплект експедиційного обладнання
+  description: Замовлений через Cargo Requests на Trade Mall польовий комплект.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: StorageFill
+    contents:
+    - id: TriadFactionFieldKit
+
+- type: entity
+  id: TriadFactionSurveyBeacon
+  name: польовий орієнтир
+  description: Позначає перевірену ділянку експедиції. Для підключення обладнання потрібен польовий комплект.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+    anchored: true
+  - type: Sprite
+    sprite: Structures/Machines/telecomms.rsi
+    state: icon
+    color: "#EBC074"
+    scale: 0.65,0.65
+  - type: InteractionOutline
+  - type: Clickable
+  - type: Physics
+    bodyType: Static
+  - type: Fixtures
+    fixtures:
+      fix1:
+        shape:
+          !type:PhysShapeAabb
+          bounds: "-0.3,-0.3,0.3,0.3"
+        density: 150
+        mask:
+        - MachineMask
+        layer:
+        - MachineLayer
+
+- type: entity
+  parent: TelecomServer
+  id: TriadFactionPlanetaryRelay
+  name: експедиційний ретранслятор
+  description: Ретранслятор зв'язку фракції. Підключення до секторної мережі підтверджується сервером після фізичного налаштування.
+  categories: [ HideSpawnMenu ]
+
+# Task-bound physical recorder placed on a spawned wreck grid.
+# A separate prototype avoids promoting an uncommissioned telecom machine.
+- type: entity
+  id: AspisFactionWreckRecorder
+  name: аварійний реєстратор
+  description: Зберігає останній запис із покинутого об'єкта. Дані можна зчитати вручну.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+    anchored: true
+  - type: Sprite
+    sprite: Structures/Machines/telecomms.rsi
+    state: icon
+    color: "#81BAC7"
+    scale: 0.55,0.55
+  - type: InteractionOutline
+  - type: Clickable
+  - type: Physics
+    bodyType: Static
+  - type: Fixtures
+    fixtures:
+      fix1:
+        shape:
+          !type:PhysShapeAabb
+          bounds: "-0.25,-0.25,0.25,0.25"
+        density: 100
+        mask:
+        - MachineMask
+        layer:
+        - MachineLayer
+
+
+# v45: second site objective, distinct from the flight recorder. It is inert
+# until the mission server validates organization, grid, map and assignment.
+- type: entity
+  id: AspisFactionWreckInspectionTerminal
+  name: експедиційний контрольний термінал
+  description: Допоміжний об'єкт експедиційного завдання. Призначення визначається типом перевірки.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+    anchored: true
+  - type: Sprite
+    sprite: Structures/Machines/telecomms.rsi
+    state: icon
+    color: "#D8BA82"
+    scale: 0.5,0.5
+  - type: InteractionOutline
+  - type: Clickable
+  - type: Physics
+    bodyType: Static
+  - type: Fixtures
+    fixtures:
+      fix1:
+        shape:
+          !type:PhysShapeAabb
+          bounds: "-0.25,-0.25,0.25,0.25"
+        density: 100
+        mask:
+        - MachineMask
+        layer:
+        - MachineLayer
+
+# v46: visibly different field equipment; each still uses the SAME server-bound
+# inspection marker. Only assigned members can service and complete it.
+- type: entity
+  parent: AspisFactionWreckInspectionTerminal
+  id: AspisFactionWreckSecurityPanel
+  name: пульт аварійної сигналізації
+  description: Для перевірки стану захисного контуру потрібна викрутка.
+  components:
+  - type: Sprite
+    sprite: Structures/Machines/telecomms.rsi
+    state: icon
+    color: "#CE8B78"
+    scale: 0.5,0.5
+
+- type: entity
+  parent: AspisFactionWreckInspectionTerminal
+  id: AspisFactionWreckScientificSensor
+  name: дослідницький сенсор
+  description: Пошкоджений оптичний блок потребує заміни та калібрування.
+  components:
+  - type: Sprite
+    sprite: Structures/Machines/telecomms.rsi
+    state: icon
+    color: "#84BADA"
+    scale: 0.5,0.5
+
+- type: entity
+  parent: AspisFactionWreckInspectionTerminal
+  id: AspisFactionWreckEmergencyController
+  name: аварійний контролер забезпечення
+  description: Відновіть пошкоджений корпус перед перезапуском системи.
+  components:
+  - type: Sprite
+    sprite: Structures/Machines/telecomms.rsi
+    state: icon
+    color: "#91B38A"
+    scale: 0.5,0.5

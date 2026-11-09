@@ -153,6 +153,12 @@ public sealed partial class ShuttleConsoleSystem
             return;
         }
 
+        if (!CanUseAspisFactionFTL(shuttleUid.Value, consoleUid.Value, targetMap, out var denied))
+        {
+            _popup.PopupEntity(denied, ent.Owner, PopupType.MediumCaution);
+            return;
+        }
+
         targetCoordinates = _shuttle.ClampCoordinatesToFTLRange(shuttleUid.Value, targetCoordinates);
 
         List<ShuttleExclusionObject>? exclusions = null;
@@ -214,6 +220,7 @@ public sealed partial class ShuttleConsoleSystem
                 drive,
                 out var massAdjustedStartupTime,
                 out var massAdjustedHyperSpaceTime);
+            ReserveAspisFactionRoute(shuttleUid.Value, targetMap);
             _shuttle.FTLToCoordinates(shuttleUid.Value, shuttleComp, adjustedCoordinates, targetAngle, massAdjustedStartupTime, massAdjustedHyperSpaceTime);
         }
     }

@@ -1,0 +1,10 @@
+# Dedicated regulator terminal, inheriting the existing organizations BUI.
+# Place it at the TDF outpost through the map editor or spawn it for testing.
+- type: entity
+  parent: ComputerOrganizationRegistry
+  id: ComputerTdfMarketOversight
+  name: термінал ринкового нагляду TDF
+  description: Секторний нагляд за угодами з акціями та ознаками ринкових маніпуляцій.
+  components:
+  - type: AccessReader
+    access: [["TdfChiefEnforcer"], ["TdfLieutenant"], ["TdfPatrolTeamLeader"]]
