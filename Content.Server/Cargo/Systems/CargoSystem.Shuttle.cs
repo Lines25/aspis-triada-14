@@ -1,4 +1,4 @@
-﻿using Content.Server.Cargo.Components;
+using Content.Server.Cargo.Components;
 using Content.Shared.Stacks;
 using Content.Shared.Cargo;
 using Content.Shared.Cargo.BUI;
@@ -385,6 +385,33 @@ public sealed partial class CargoSystem
                 if (_blacklistQuery.HasComponent(ent))
                     continue;
 
+                // Quota crates are transferred, not sold for their contents' cash value.
+                // Only real trade-post sales at the assigned A-D station are accepted.
+                // Wrong-post crates remain on the pallet and can be transported elsewhere.
+                if (TryComp<Content.Server._Aspis.Organizations.OrganizationQuotaCrateComponent>(ent,
+                        out var quotaManifest))
+                {
+                    if (IsQuotaCrateAtDestination(ent, quotaManifest))
+                        toSell.Add(ent);
+                    continue;
+                }
+
+                // Quota export merchandise is settled exclusively in the organization
+                // ledger. Never also pay the pallet seller for its contents.
+                // Preflight must happen before the normal cargo price calculation.
+                if (HasComp<Content.Server._Aspis.Organizations.OrganizationQuotaExportComponent>(ent) ||
+                    HasComp<Content.Server.Storage.Components.EntityStorageComponent>(ent))
+                {
+                    var organizationQuotas = EntityManager.System<Content.Server._Aspis.Organizations.OrganizationSystem>();
+                    var quotaReady = organizationQuotas.TryPrepareQuotaExportForSale(ent, out var isQuotaExport);
+                    if (isQuotaExport)
+                    {
+                        if (quotaReady)
+                            toSell.Add(ent);
+                        continue;
+                    }
+                }
+
                 // Mono: Use vending machine discount pricing for cargo sales
                 // Triad: the collecting variant returns the same total and additionally reports what
                 // each contained entity contributed, so a crate breaks down to its contents instead
@@ -704,7 +731,8 @@ public sealed partial class CargoSystem
         // Triad: capture before the cast, so the rounding loss is visible rather than inferred.
         CapturePalletSale(uid, component, capture, args.Actor, price, (int) price,
             blackMarketTaxAmount, frontierTaxAmount, nfsdTaxAmount, medicalTaxAmount);
-        _stack.Spawn((int)price, stackPrototype, xform.Coordinates);
+        if (price > 0)
+            _stack.Spawn((int)price, stackPrototype, xform.Coordinates);
         _audio.PlayPvs(ApproveSound, uid);
         UpdatePalletConsoleInterface((uid, component)); // Frontier: EntityUid<Entity
     }
@@ -715,6 +743,7 @@ public sealed partial class CargoSystem
     {
         Reset();
         CleanupTradeCrateDestinations(); // Frontier
+        ResetQuotaDeliveryRound(); // Triada: clear round-only cargo order authorizations
     }
 }
 

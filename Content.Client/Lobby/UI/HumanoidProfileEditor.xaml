@@ -171,6 +171,26 @@
                                            Margin="5,5,5,5"/>
                                 </PanelContainer>
                             </BoxContainer>
+                            <!-- Triada: read-only server-owned membership for this character slot.
+                                 It is deliberately independent of the selectable Player Faction. -->
+                            <PanelContainer StyleClasses="BackgroundDark" Margin="15,5,15,10" HorizontalExpand="True">
+                                <BoxContainer Orientation="Vertical" Margin="12" SeparationOverride="8" HorizontalExpand="True">
+                                    <BoxContainer Orientation="Horizontal" HorizontalExpand="True" SeparationOverride="6">
+                                        <Label Text="ОРГАНІЗАЦІЯ ПЕРСОНАЖА" />
+                                        <Control HorizontalExpand="True" />
+                                        <Button Name="TriadaOrganizationRefresh" Text="Оновити" MinHeight="24" />
+                                    </BoxContainer>
+                                    <BoxContainer Orientation="Horizontal" SeparationOverride="12" HorizontalExpand="True">
+                                        <BoxContainer Name="TriadaOrganizationLogo" Orientation="Vertical" MinWidth="56" MinHeight="56" />
+                                        <BoxContainer Orientation="Vertical" HorizontalExpand="True" SeparationOverride="5">
+                                            <Label Name="TriadaOrganizationName" Text="Завантаження даних організації..." />
+                                            <Label Name="TriadaOrganizationType" Text="" />
+                                            <Label Name="TriadaOrganizationPosition" Text="" />
+                                        </BoxContainer>
+                                    </BoxContainer>
+                                    <Label Text="Членство та посади змінюються лише через консоль організацій." />
+                                </BoxContainer>
+                            </PanelContainer>
                             <!-- Company Image -->
                             <BoxContainer Margin="10,5,10,5" HorizontalAlignment="Center">
                                 <TextureRect Name="CompanyImage" HorizontalAlignment="Center"

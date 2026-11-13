@@ -38,6 +38,8 @@ using Robust.Shared.Utility;
 using Direction = Robust.Shared.Maths.Direction;
 using Content.Shared._DV.Traits; // DV - Traits
 using Content.Client._Mono.Company;
+using Content.Shared._Aspis.Organizations;
+using Content.Client._Aspis.Organizations;
 using Content.Client._Triad.Lobby; // Triad: admin-gated jobs
 
 namespace Content.Client.Lobby.UI
@@ -136,6 +138,7 @@ namespace Content.Client.Lobby.UI
             _resManager = resManager;
             _requirements = requirements;
             _controller = UserInterfaceManager.GetUIController<LobbyUIController>();
+            TriadaOrganizationRefresh.OnPressed += _ => RequestTriadaOrganization();
 
             _whitelist = _entManager.System<EntityWhitelistSystem>(); // Frontier
 
@@ -956,6 +959,7 @@ namespace Content.Client.Lobby.UI
             UpdateCMarkingsFacialHair();
 
             UpdateCompanyControls();
+            RequestTriadaOrganization();
             UpdateTraitsSelection(); // DeltaV - Traits
 
             RefreshAntags();
@@ -972,6 +976,77 @@ namespace Content.Client.Lobby.UI
             }
         }
 
+
+        private void RequestTriadaOrganization()
+        {
+            foreach (var item in TriadaOrganizationLogo.Children.ToArray())
+                TriadaOrganizationLogo.RemoveChild(item);
+            TriadaOrganizationName.Text = CharacterSlot.HasValue
+                ? "Завантаження даних організації..." : "Персонажа не обрано";
+            TriadaOrganizationType.Text = string.Empty;
+            TriadaOrganizationPosition.Text = string.Empty;
+            TriadaOrganizationName.FontColorOverride = Color.White;
+            if (CharacterSlot is { } slot && Profile != null)
+                _preferencesManager.RequestOrganizationProfile(slot);
+        }
+
+        /// <summary>
+        /// Server-authoritative corporate affiliation; a response for an old slot/name
+        /// must never be presented as the current edited character's membership.
+        /// </summary>
+        public void ApplyOrganizationProfile(MsgOrganizationProfileResponse answer)
+        {
+            if (CharacterSlot != answer.Slot || Profile == null ||
+                !string.Equals(Profile.Name, answer.CharacterName, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            foreach (var item in TriadaOrganizationLogo.Children.ToArray())
+                TriadaOrganizationLogo.RemoveChild(item);
+            if (!answer.HasMembership)
+            {
+                TriadaOrganizationName.Text = "Не перебуває в організації";
+                TriadaOrganizationType.Text = "—";
+                TriadaOrganizationPosition.Text = string.Empty;
+                return;
+            }
+
+            TriadaOrganizationName.Text = answer.OrganizationName;
+            TriadaOrganizationType.Text = $"{answer.OrganizationKind} · {answer.IndustryName}";
+            TriadaOrganizationPosition.Text = $"Посада: {answer.Position}";
+            if (answer.ColorHex.Length == 7 && answer.ColorHex[0] == '#' &&
+                answer.ColorHex.Skip(1).All(Uri.IsHexDigit))
+                TriadaOrganizationName.FontColorOverride = Color.FromHex(answer.ColorHex);
+
+            if (answer.Banner.Length != 0)
+            {
+                TriadaOrganizationLogo.AddChild(new OrganizationBannerControl(answer.Banner, 56));
+                return;
+            }
+
+            // Preserve the console's empty-logo convention without copying an
+            // arbitrary PNG into the character's persistent preferences.
+            var cache = IoCManager.Resolve<IResourceCache>();
+            foreach (var path in new[]
+                     {
+                         "/Textures/Objects/Fun/toys.rsi",
+                         "/Textures/Objects/Fun/plushies.rsi"
+                     })
+            {
+                if (!cache.TryGetResource<RSIResource>(new ResPath(path), out var rsi) ||
+                    !rsi.RSI.TryGetState("plushie_hampter", out var state))
+                    continue;
+
+                TriadaOrganizationLogo.AddChild(new TextureRect
+                {
+                    Texture = state.Frame0,
+                    MinWidth = 56,
+                    MinHeight = 56
+                });
+                return;
+            }
+
+            TriadaOrganizationLogo.AddChild(new Label { Text = "—" });
+        }
 
         /// <summary>
         /// A slim reload that only updates the entity itself and not any of the job entities, etc.

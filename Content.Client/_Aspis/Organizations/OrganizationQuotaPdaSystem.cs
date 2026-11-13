@@ -10,7 +10,7 @@ using Robust.Shared.Player;
 namespace Content.Client._Aspis.Organizations;
 
 /// <summary>PDA read-only quota view. Network messages are registered before connection by ClientPreferencesManager.</summary>
-public sealed class OrganizationQuotaPdaSystem : EntitySystem
+public sealed partial class OrganizationQuotaPdaSystem : EntitySystem
 {
     [Dependency] private IClientNetManager _network = default!;
     [Dependency] private IClientPreferencesManager _preferencesManager = default!;

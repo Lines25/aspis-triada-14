@@ -109,6 +109,9 @@ namespace Content.Client.PDA
 
         protected override void AttachCartridgeUI(Control cartridgeUIFragment, string? title)
         {
+            // The organization page is built locally, not as a cartridge fragment.
+            // Clear it before opening a normal PDA program so the two UIs never overlap.
+            _menu?.CloseOrganizationProgram();
             _menu?.ProgramView.AddChild(cartridgeUIFragment);
             _menu?.ToProgramView(title ?? Loc.GetString("comp-pda-io-program-fallback-title"));
         }
