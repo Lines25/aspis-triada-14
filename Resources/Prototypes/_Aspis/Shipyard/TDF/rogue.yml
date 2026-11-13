@@ -1,0 +1,33 @@
+- type: vessel
+  id: Rogue
+  parent: BaseVesselTdf
+  name: TDF Rogue
+  description: Micro assualt vessel with a toggle for going dark in deep space.
+  price: 23000
+  category: Micro
+  group: Security
+  access: Security
+  shuttlePath: /Maps/_Aspis/Shuttles/TDF/rogue.yml
+  guidebookPage: Null
+  class:
+  - Fighter
+  engine:
+  - APU
+
+- type: gameMap
+  id: Rogue
+  mapName: 'TDF Rogue'
+  mapPath: /Maps/_Aspis/Shuttles/TDF/rogue.yml
+  minPlayers: 0
+  stations:
+    Rogue:
+      stationProto: StandardFrontierSecurityVessel
+      components:
+      - type: StationNameSetup
+        mapNameTemplate: 'Rogue TDF{1}'
+        nameGenerator:
+          !type:NanotrasenNameGenerator
+          prefixCreator: '14'
+      - type: StationJobs
+        availableJobs:
+          TdfEnforcer: [ 0, 0 ]

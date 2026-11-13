@@ -1,0 +1,33 @@
+- type: vessel
+  id: Fighter
+  parent: BaseVesselTdf
+  name: TDF Fighter
+  description: Micro attack vessel used for boarding and transport of prisoners.
+  price: 18000
+  category: Micro
+  group: Security
+  access: Security
+  shuttlePath: /Maps/_Aspis/Shuttles/TDF/fighter.yml
+  guidebookPage: Null
+  class:
+  - Fighter
+  engine:
+  - APU
+
+- type: gameMap
+  id: Fighter
+  mapName: 'TDF Fighter'
+  mapPath: /Maps/_Aspis/Shuttles/TDF/fighter.yml
+  minPlayers: 0
+  stations:
+    Fighter:
+      stationProto: StandardFrontierSecurityVessel
+      components:
+      - type: StationNameSetup
+        mapNameTemplate: 'Fighter TDF{1}'
+        nameGenerator:
+          !type:NanotrasenNameGenerator
+          prefixCreator: '14'
+      - type: StationJobs
+        availableJobs:
+          TdfEnforcer: [ 0, 0 ]

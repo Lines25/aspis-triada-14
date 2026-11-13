@@ -1,0 +1,33 @@
+- type: vessel
+  id: Cleric
+  parent: BaseVesselTdf
+  name: TDF Cleric
+  description: Micro support vessel used for emergency rescues and first aid.
+  price: 20000
+  category: Micro
+  group: Security
+  access: Security
+  shuttlePath: /Maps/_Aspis/Shuttles/TDF/cleric.yml
+  guidebookPage: Null
+  class:
+  - Medical
+  engine:
+  - APU
+
+- type: gameMap
+  id: Cleric
+  mapName: 'TDF Cleric'
+  mapPath: /Maps/_Aspis/Shuttles/TDF/cleric.yml
+  minPlayers: 0
+  stations:
+    Cleric:
+      stationProto: StandardFrontierSecurityVessel
+      components:
+      - type: StationNameSetup
+        mapNameTemplate: 'Cleric TDF{1}'
+        nameGenerator:
+          !type:NanotrasenNameGenerator
+          prefixCreator: '14'
+      - type: StationJobs
+        availableJobs:
+          TdfEnforcer: [ 0, 0 ]

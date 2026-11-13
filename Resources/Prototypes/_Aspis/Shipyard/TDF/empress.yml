@@ -1,0 +1,39 @@
+- type: vessel
+  id: Empress
+  parent: BaseVesselTdf
+  name: TDF Empress Mothership
+  description: A large patrol vessel capable of carrying up to 4 smaller faster attack ships. The flagship vessel of the TDF.
+  price: 250000
+  purchasable: false # voucher only
+  category: Large
+  group: Security, Shipyard
+  access: Security # Shouldn't be buyable with sec voucher.
+  mapchecker_group_override: Security
+  shuttlePath: /Maps/_Aspis/Shuttles/TDF/empress.yml
+  guidebookPage: Null
+  class:
+  - Capital
+  engine:
+  - AME
+
+- type: gameMap
+  id: Empress
+  mapName: 'Empress Mothership'
+  mapPath: /Maps/_Aspis/Shuttles/TDF/empress.yml
+  minPlayers: 0
+  stations:
+    Empress:
+      stationProto: StandardTriadTdfVessel
+      components:
+      - type: StationNameSetup
+        mapNameTemplate: 'Empress Mothership TDF{1}'
+        nameGenerator: !type:NanotrasenNameGenerator
+          prefixCreator: '14'
+      - type: StationJobs
+        availableJobs:
+          TdfPatrolTeamLeader: [ 0, 0 ]
+          TdfEnforcer: [ 0, 0 ]
+          TdfMedic: [ 0, 0 ]
+          Borg: [ 0, 0 ]
+          TdfCadet: [ 0, 0 ]
+

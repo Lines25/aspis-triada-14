@@ -105,6 +105,7 @@
     companyName: TDF
     vessels:
     - Phalanx # Triad - modified this voucher
+    - Empress # Aspis - mothership carrier
   - type: StaticPrice
     vendPrice: 325000
 
