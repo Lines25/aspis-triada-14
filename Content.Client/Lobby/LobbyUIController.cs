@@ -70,6 +70,8 @@ public sealed partial class LobbyUIController : UIController, IOnStateEntered<Lo
         base.Initialize();
         _prototypeManager.PrototypesReloaded += OnProtoReload;
         _preferencesManager.OnServerDataLoaded += PreferencesDataLoaded;
+        _preferencesManager.OnOrganizationProfileReceived += profile =>
+            _profileEditor?.ApplyOrganizationProfile(profile);
         _requirements.Updated += OnRequirementsUpdated;
 
         _configurationManager.OnValueChanged(CCVars.FlavorText, args =>

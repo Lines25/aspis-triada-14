@@ -1,4 +1,5 @@
 using Content.Server._NF.Contraband.Components;
+using Content.Server._Aspis.Organizations;
 using Content.Server.Cargo.Components;
 using Content.Server.Cargo.Systems;
 using Content.Server.Stack;
@@ -23,6 +24,7 @@ namespace Content.Server._NF.Contraband.Systems;
 public sealed partial class ContrabandTurnInSystem : SharedContrabandTurnInSystem
 {
     [Dependency] private IPrototypeManager _protoMan = default!;
+    [Dependency] private OrganizationSystem _organizations = default!;
     [Dependency] private EntityLookupSystem _lookup = default!;
     [Dependency] private StackSystem _stack = default!;
     [Dependency] private StationSystem _station = default!;
@@ -212,8 +214,17 @@ public sealed partial class ContrabandTurnInSystem : SharedContrabandTurnInSyste
 
         SellPallets(gridUid, component, null, out var price);
 
-        var stackPrototype = _protoMan.Index<StackPrototype>(component.RewardType);
-        _stack.Spawn(price, stackPrototype, uid.ToCoordinates());
+        // Split the *existing* TDF seizure reward rather than minting extra credits.
+        // Only the TDF terminal's payout is taxed; pirates and other factions are unchanged.
+        var restored = component.Faction.Equals("TDF", StringComparison.OrdinalIgnoreCase)
+            ? _organizations.CreditTdfContrabandTurnIn(price)
+            : 0;
+        var playerReward = Math.Max(0, price - restored);
+        if (playerReward > 0)
+        {
+            var stackPrototype = _protoMan.Index<StackPrototype>(component.RewardType);
+            _stack.Spawn(playerReward, stackPrototype, uid.ToCoordinates());
+        }
         UpdatePalletConsoleInterface(uid, component);
     }
 }

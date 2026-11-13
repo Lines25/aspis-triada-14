@@ -1,4 +1,4 @@
-﻿using Content.Server.Access.Systems;
+using Content.Server.Access.Systems;
 using Content.Server.Popups;
 using Content.Server.Radio.EntitySystems;
 using Content.Server._NF.Bank;
@@ -54,6 +54,7 @@ using Robust.Shared.Timing;
 using Content.Server.GameTicking;
 using Content.Shared._NF.Bank.BUI;
 
+using Content.Server._Aspis.Organizations;
 using Content.Server._Triad.Market; // Triad: market data
 using Content.Server.Database; // Triad: market data
 
@@ -65,6 +66,7 @@ namespace Content.Server._NF.Shipyard.Systems;
 public sealed partial class ShipyardSystem : SharedShipyardSystem
 {
     [Dependency] private IPlayerManager _player = default!;
+    [Dependency] private OrganizationSystem _organizations = default!;
     [Dependency] private AccessSystem _accessSystem = default!;
     [Dependency] private AccessReaderSystem _access = default!;
     [Dependency] private PopupSystem _popup = default!;
@@ -217,15 +219,14 @@ public sealed partial class ShipyardSystem : SharedShipyardSystem
         }
         else
         {
-            if (bank.Balance <= vessel.Price)
-            {
-                Del(shuttleUid);
-                ConsolePopup(player, Loc.GetString("cargo-console-insufficient-funds", ("cost", vessel.Price)));
-                PlayDenySound(player, shipyardConsoleUid, component);
-                return;
-            }
-
-            if (!_bank.TryBankWithdraw(player, vessel.Price, new MarketRecord { Kind = MarketTransactionKind.ShipyardPurchase })) // Triad: market data
+            // A Security console can use the TDF shuttle reserve, if an authorized
+            // on-duty officer has allocated sufficient budget. Otherwise the
+            // existing personal-bank payment flow is preserved.
+            var paidFromTdf = (ShipyardConsoleUiKey) args.UiKey == ShipyardConsoleUiKey.Security &&
+                _organizations.TrySpendTdfShuttleBudget(player, vessel.Price);
+            if (!paidFromTdf &&
+                (bank.Balance < vessel.Price ||
+                 !_bank.TryBankWithdraw(player, vessel.Price, new MarketRecord { Kind = MarketTransactionKind.ShipyardPurchase })))
             {
                 Del(shuttleUid);
                 ConsolePopup(player, Loc.GetString("cargo-console-insufficient-funds", ("cost", vessel.Price)));
