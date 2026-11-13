@@ -8,6 +8,7 @@
         <pda:PdaNavigationButton Name="HomeButton" SetWidth="32" CurrentTabBorderThickness="0 0 2 0" IsCurrent="True"/>
         <pda:PdaNavigationButton Name="ProgramListButton" Access="Public" MinWidth="100" LabelText="{Loc 'comp-pda-io-program-list-button'}"/>
         <pda:PdaNavigationButton Name="SettingsButton" MinWidth="100" LabelText="{Loc 'comp-pda-io-settings-button'}"/>
+        <pda:PdaNavigationButton Name="OrganizationNavigationButton" MinWidth="90" LabelText="Organization" Visible="False"/>
 
         <pda:PdaNavigationButton Name="ProgramTitle" Access="Public" BorderThickness="0 0 0 2" CurrentTabBorderThickness="2 0 0 2"
                                  ActiveBgColor="#202023" Visible="False"/>
@@ -105,6 +106,13 @@
                       Name="ProgramView"
                       Access="Public">
         </BoxContainer>
+        <ScrollContainer VerticalExpand="True" HorizontalExpand="True">
+            <BoxContainer Orientation="Vertical" Margin="8" HorizontalExpand="True">
+                <Label Name="OrganizationTitleLabel" Access="Public"/>
+                <Label Name="OrganizationRoleLabel" Access="Public"/>
+                <Label Name="OrganizationMembersLabel" Access="Public"/>
+            </BoxContainer>
+        </ScrollContainer>
     </BoxContainer>
     <BoxContainer Name="ContentFooter" HorizontalExpand="True" SetHeight="28" Margin="1 0 2 1">
         <controls:StripeBack HasBottomEdge="False" HasMargins="False" HorizontalExpand="True">

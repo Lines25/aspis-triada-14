@@ -25,6 +25,7 @@ using Content.Shared._NF.Shipyard.Components; // Frontier
 using Content.Server._NF.Shipyard.Systems; // Frontier
 using Content.Server._NF.SectorServices; // Frontier
 using Content.Shared._Mono.Company;
+using Content.Server._Aspis.Organizations;
 using Robust.Shared.Prototypes;
 using Content.Shared.DeviceNetwork.Components;
 using Content.Server.RoundEnd; // Frontier
@@ -47,6 +48,7 @@ namespace Content.Server.PDA
         [Dependency] private IPrototypeManager _prototypeManager = default!;
         [Dependency] private IConfigurationManager _config = default!; // DeltaV
         [Dependency] private RoundEndSystem _roundEndSystem = default!; // Frontier
+        [Dependency] private OrganizationSystem _organizations = default!;
         
         private static DateTime ServerDate; // DeltaV - PDA
 
@@ -236,6 +238,20 @@ namespace Content.Server.PDA
                 }
             }
 
+            string? organizationName = null;
+            var organizationColor = Color.White;
+            string? organizationRole = null;
+            string[] organizationMembers = [];
+            if ((actor_uid ?? pda.PdaOwner) is { } currentActor &&
+                _organizations.TryGetPdaDetails(currentActor, out var membershipName, out var membershipColor,
+                    out _, out var memberNames))
+            {
+                organizationName = membershipName;
+                organizationColor = membershipColor;
+                organizationRole = _organizations.GetPdaRoleTitle(currentActor);
+                organizationMembers = memberNames;
+            }
+
             var state = new PdaUpdateState(
                 programs,
                 GetNetEntity(loader.ActiveProgram),
@@ -250,6 +266,9 @@ namespace Content.Server.PDA
                     JobTitle = id?.LocalizedJobTitle,
                     CompanyName = companyName,
                     CompanyColor = companyColor,
+                    OrganizationName = organizationName,
+                    OrganizationColor = organizationColor,
+                    OrganizationRole = organizationRole,
                     CurrentDate = pda.CurrentDate, // DeltaV - PDA date
                     StationAlertLevel = pda.StationAlertLevel,
                     StationAlertColor = pda.StationAlertColor
@@ -262,6 +281,7 @@ namespace Content.Server.PDA
                 hasInstrument,
                 address);
 
+            state.OrganizationMembers = organizationMembers;
             _ui.SetUiState(uid, PdaUiKey.Key, state);
         }
 
@@ -278,7 +298,7 @@ namespace Content.Server.PDA
             if (!PdaUiKey.Key.Equals(msg.UiKey))
                 return;
 
-            UpdatePdaUi(uid, pda);
+            UpdatePdaUi(uid, pda, msg.Actor);
         }
 
         private void OnUiMessage(EntityUid uid, PdaComponent pda, PdaToggleFlashlightMessage msg)

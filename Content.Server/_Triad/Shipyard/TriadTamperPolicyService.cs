@@ -275,6 +275,23 @@ public sealed partial class TriadTamperPolicyService : EntitySystem
         return fresh;
     }
 
+    // Permanent outposts require a signature issued by THIS server, regardless of
+    // the normal shipyard's notify/off tamper configuration or migration permits.
+    // No player-supplied public key can self-attest as a trusted outpost blueprint.
+    public bool IsTrustedForPermanentOutpost(AuthenticatedShipFile envelope)
+    {
+        try
+        {
+            var pubkey = envelope.GetInstancePublicKeyInfo();
+            return pubkey is { Length: > 0 } && envelope.IsShipSigned() &&
+                _keyStore.IsOwnKey(SHA256.HashData(pubkey));
+        }
+        catch (Exception)
+        {
+            return false;
+        }
+    }
+
     public LoadDecision EvaluateLoad(AuthenticatedShipFile envelope, NetUserId player, string? shipName)
     {
         var mode = ResolveMode();

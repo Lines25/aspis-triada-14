@@ -4,9 +4,7 @@ using Robust.Shared.Serialization;
 namespace Content.Shared.PDA
 {
     [Serializable, NetSerializable]
-    public sealed class PdaUpdateState : CartridgeLoaderUiState // WTF is this. what. I ... fuck me I just want net entities to work
-        // TODO purge this shit
-        //AAAAAAAAAAAAAAAA
+    public sealed class PdaUpdateState : CartridgeLoaderUiState
     {
         public bool FlashlightEnabled;
         public bool HasPen;
@@ -17,9 +15,10 @@ namespace Content.Shared.PDA
         public bool HasUplink;
         public bool CanPlayMusic;
         public string? Address;
-        public int Balance; // Frontier
-        public string? OwnedShipName; // Frontier
-        public TimeSpan? RoundEndTime; // Frontier
+        public int Balance;
+        public string? OwnedShipName;
+        public TimeSpan? RoundEndTime;
+        public string[] OrganizationMembers = [];
 
         public PdaUpdateState(
             List<NetEntity> programs,
@@ -29,9 +28,9 @@ namespace Content.Shared.PDA
             bool hasPai,
             bool hasBook,
             PdaIdInfoText pdaOwnerInfo,
-            int balance, // Frontier
-            string? ownedShipName, // Frontier
-            TimeSpan? roundEndTime, // Frontier
+            int balance,
+            string? ownedShipName,
+            TimeSpan? roundEndTime,
             string? stationName,
             bool hasUplink = false,
             bool canPlayMusic = false,
@@ -47,9 +46,9 @@ namespace Content.Shared.PDA
             CanPlayMusic = canPlayMusic;
             StationName = stationName;
             Address = address;
-            Balance = balance; // Frontier
-            OwnedShipName = ownedShipName; // Frontier
-            RoundEndTime = roundEndTime; // Frontier
+            Balance = balance;
+            OwnedShipName = ownedShipName;
+            RoundEndTime = roundEndTime;
         }
     }
 
@@ -61,8 +60,11 @@ namespace Content.Shared.PDA
         public string? JobTitle;
         public string? CompanyName;
         public Color CompanyColor;
+        public string? OrganizationName;
+        public Color OrganizationColor;
+        public string? OrganizationRole;
         public string? StationAlertLevel;
         public Color StationAlertColor;
-        public DateTime? CurrentDate; // DeltaV - PDA date
+        public DateTime? CurrentDate;
     }
 }
