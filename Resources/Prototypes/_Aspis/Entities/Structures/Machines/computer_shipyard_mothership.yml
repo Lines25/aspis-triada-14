@@ -1,0 +1,22 @@
+- type: entity
+  id: ComputerShipyardMothershipEmpress
+  parent: BaseCarrierComputer
+  name: empress shipyard
+  description: Used to buy ships from the Federation of SOL naval reserves.
+  components:
+  - type: ShipyardListing
+    shuttles:
+    - Fighter
+    - Cleric
+    - Rogue
+  - type: Sprite
+    sprite: _Aspis/Structures/Machines/mothership_computer.rsi
+    layers:
+    - map: ["computerLayerBody"]
+      state: computer_not_rot
+    - map: ["computerLayerKeyboard"]
+      state: gunnery_keyboard
+    - map: ["computerLayerScreen"]
+      state: shipyard_Empress
+    - map: ["computerLayerKeys"]
+      state: gunnery_keys
