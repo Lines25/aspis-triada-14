@@ -1,0 +1,19 @@
+# The normal SS14 Flatpack system requires a pulsing-quality tool
+# (multitool) and checks whether the shuttle tile can receive the machine.
+- type: entity
+  parent: BaseFlatpack
+  id: AspisAgroSprayerFlatpack
+  name: флетпак авіаційного розпилювача
+  description: Розгорніть на підлозі шатла мультитулом; після посадки завантажте гербіцид з агростанції.
+  components:
+  - type: Flatpack
+    entity: AspisAgriculturalSprayer
+  - type: Sprite
+    sprite: Objects/Devices/flatpack.rsi
+    layers:
+    - state: base
+    - state: overlay
+      color: "#7CA778"
+    - state: icon-default
+  - type: StaticPrice
+    price: 0

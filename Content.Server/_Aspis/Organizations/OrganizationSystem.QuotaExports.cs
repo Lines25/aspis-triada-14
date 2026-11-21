@@ -70,6 +70,12 @@ public sealed partial class OrganizationSystem
         }
 
         var workflow = OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry);
+        if (workflow == OrganizationQuotaWorkflow.AgriculturalExport &&
+            claim.DifficultySlot == AspisPlanetaryAgriculturalSlot)
+        {
+            _quotaPopup.PopupEntity("Планетарна квота не здається вантажними ящиками.", args.User, args.User);
+            return;
+        }
         // Pharmaceutical shipments must be sealed with the invoice applied to
         // the crate itself. Paper found inside a box proves authorship of that
         // paper but not who changed the drugs after packaging.
@@ -165,6 +171,17 @@ public sealed partial class OrganizationSystem
             _gameTiming.CurTime >= job.Value.Deadline ||
             job.Value.Delivered >= job.Value.Units)
             return false;
+        if (!QuotaExportInspectionApproved(crate, job.Value, seal))
+            return false;
+        if (workflow == OrganizationQuotaWorkflow.AgriculturalExport)
+        {
+            if (job.Key.Slot == AspisPlanetaryAgriculturalSlot)
+                return false; // One-shot atmospheric sprayer is the only proof.
+            var destination = Array.FindIndex(job.Value.PostTargets, n => n > 0);
+            if (destination >= 0 && _quotaCargoSystem.TryGetQuotaTradeDestination(destination, out _) &&
+                !_quotaCargoSystem.IsQuotaExportAtDestination(crate, destination))
+                return false;
+        }
         if (workflow == OrganizationQuotaWorkflow.PharmaceuticalExport)
         {
             var post = Array.FindIndex(job.Value.PostTargets, count => count > 0);
@@ -188,7 +205,7 @@ public sealed partial class OrganizationSystem
             return true;
         }
 
-        return CountVerifiedExportContents(crate, workflow) >=
+        return CountVerifiedExportContents(crate, workflow, job.Key.Slot) >=
             OrganizationQuotaRules.ExportItemsPerCrate(workflow, job.Key.Slot);
     }
 
@@ -204,6 +221,17 @@ public sealed partial class OrganizationSystem
             p.Value.Organization == seal.Organization && p.Value.Code == seal.Code);
         if (job.Value == null || job.Value.Completed || _gameTiming.CurTime >= job.Value.Deadline)
             return;
+        if (!QuotaExportInspectionApproved(crate, job.Value, seal))
+            return;
+        if (workflow == OrganizationQuotaWorkflow.AgriculturalExport)
+        {
+            if (job.Key.Slot == AspisPlanetaryAgriculturalSlot)
+                return;
+            var destination = Array.FindIndex(job.Value.PostTargets, n => n > 0);
+            if (destination >= 0 && _quotaCargoSystem.TryGetQuotaTradeDestination(destination, out _) &&
+                !_quotaCargoSystem.IsQuotaExportAtDestination(crate, destination))
+                return;
+        }
 
         if (workflow == OrganizationQuotaWorkflow.PharmaceuticalExport)
         {
@@ -245,7 +273,7 @@ public sealed partial class OrganizationSystem
         }
 
         var required = OrganizationQuotaRules.ExportItemsPerCrate(workflow, job.Key.Slot);
-        var actual = CountVerifiedExportContents(crate, workflow);
+        var actual = CountVerifiedExportContents(crate, workflow, job.Key.Slot);
         if (actual < required)
         {
             _adminLog.Add(LogType.Action, LogImpact.Low,
@@ -283,7 +311,7 @@ public sealed partial class OrganizationSystem
             $"Квота {seal.Code}: партію відхилено. {inspection.Report}", false);
     }
 
-    private int CountVerifiedExportContents(EntityUid crate, OrganizationQuotaWorkflow workflow)
+    private int CountVerifiedExportContents(EntityUid crate, OrganizationQuotaWorkflow workflow, int agriculturalSlot = -1)
     {
         var visited = new HashSet<EntityUid>();
         var nodes = new Stack<(EntityUid Entity, int Depth)>();
@@ -303,7 +331,7 @@ public sealed partial class OrganizationSystem
             var (item, depth) = nodes.Pop();
             if (!visited.Add(item) || depth > 12)
                 continue;
-            count += CountExportItem(item, workflow);
+            count += CountExportItem(item, workflow, agriculturalSlot);
             if (count > 10000)
                 return 0;
             if (!TryComp<ContainerManagerComponent>(item, out var nested))
@@ -315,7 +343,7 @@ public sealed partial class OrganizationSystem
         return count;
     }
 
-    private int CountExportItem(EntityUid item, OrganizationQuotaWorkflow workflow)
+    private int CountExportItem(EntityUid item, OrganizationQuotaWorkflow workflow, int agriculturalSlot)
     {
         if (workflow == OrganizationQuotaWorkflow.ResearchExport)
         {
@@ -326,7 +354,12 @@ public sealed partial class OrganizationSystem
                 technology.Recipes is { Count: > 0 } ? 1 : 0;
         }
         if (workflow == OrganizationQuotaWorkflow.AgriculturalExport)
-            return HasComp<ProduceComponent>(item) || HasComp<SeedComponent>(item) ? 1 : 0;
+        {
+            if (!HasComp<ProduceComponent>(item) && !HasComp<SeedComponent>(item))
+                return 0;
+            var proto = MetaData(item).EntityPrototype?.ID ?? string.Empty;
+            return AspisAgriculturalCargoMatches(proto, agriculturalSlot) ? 1 : 0;
+        }
         if (workflow == OrganizationQuotaWorkflow.TradeExport &&
             (HasComp<ProduceComponent>(item) || HasComp<SeedComponent>(item)))
             return 1;

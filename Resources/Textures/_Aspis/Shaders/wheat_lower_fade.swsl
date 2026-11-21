@@ -1,0 +1,9 @@
+light_mode unshaded;
+// Lower ~half of character, outfit and carried equipment silhouette is faded.
+// No world-space crop sprites are spawned or drawn over projectiles/items.
+void fragment()
+{
+    highp vec4 tex = zTexture(UV);
+    highp float mask = UV.y > 0.48 ? 1.0 : 0.30;
+    COLOR = vec4(tex.rgb, tex.a * mask);
+}

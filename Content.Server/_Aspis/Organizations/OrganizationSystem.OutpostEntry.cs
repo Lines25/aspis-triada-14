@@ -14,6 +14,9 @@ using Content.Server.Station.Systems;
 using Content.Shared._Aspis.Organizations;
 using Content.Shared.Access.Components;
 using Content.Shared.Access.Systems;
+using Content.Shared.Containers.ItemSlots;
+using Content.Shared.Doors;
+using Robust.Shared.Containers;
 using Content.Shared.Interaction;
 using Content.Shared.Preferences;
 using Content.Shared.Roles;
@@ -28,6 +31,7 @@ public sealed partial class OrganizationSystem
 {
     private const long OutpostAccessConfiguratorPrice = 30_000;
     private const long OutpostBeaconPrice = 2_000;
+    [Dependency] private ItemSlotsSystem _organizationConfiguratorSlots = default!;
 
     [Dependency] private StationSpawningSystem _organizationSpawn = default!;
     // GetTileMixture reads the authoritative server atmosphere on the beacon
@@ -62,6 +66,123 @@ public sealed partial class OrganizationSystem
             IsOriginalController(args.User) &&
             TryGetOutpostMember(reader.Organization, key, out _, out var tier) &&
             tier >= reader.RequiredTier;
+    }
+
+    private void OnCorporateDoorAccess(EntityUid uid, OrganizationPropertyAccessReaderComponent reader,
+        BeforeDoorOpenedEvent args)
+    {
+        // Corporate access is an extra, authoritative server-only door gate.
+        // The stock AccessReader has no per-company tag namespace.
+        if (args.User is not { } user ||
+            !_organizations.TryGetValue(reader.Organization, out var org) ||
+            !HasAnyMatchingCorporatePermission(user, uid, reader))
+            args.Cancel();
+    }
+
+    private void OnLegacyOutpostDoorAccess(EntityUid uid, OrganizationOutpostDoorComponent reader,
+        BeforeDoorOpenedEvent args)
+    {
+        if (args.User is not { } user || !TryGetCharacter(user, out var key, out _) ||
+            !TryGetOutpostMember(reader.Organization, key, out _, out var tier) ||
+            tier < reader.RequiredTier)
+            args.Cancel();
+    }
+
+    private void OnAdvancedConfiguratorInit(EntityUid uid, OrganizationOutpostConfiguratorComponent comp,
+        ComponentInit args)
+    {
+        if (comp.AdvancedUi)
+            _organizationConfiguratorSlots.AddItemSlot(uid, OrganizationOutpostConfiguratorComponent.CardSlotId, comp.CardSlot);
+    }
+
+    private void OnAdvancedConfiguratorRemoved(EntityUid uid, OrganizationOutpostConfiguratorComponent comp,
+        ComponentRemove args)
+    {
+        if (comp.AdvancedUi)
+            _organizationConfiguratorSlots.RemoveItemSlot(uid, comp.CardSlot);
+    }
+
+    private bool HasAuthorizedConfiguratorCard(OrganizationOutpostConfiguratorComponent comp, int slot)
+    {
+        return comp.AdvancedUi &&
+            comp.CardSlot.Item is { } cardUid &&
+            !TerminatingOrDeleted(cardUid) &&
+            TryComp<OrganizationAccessCardComponent>(cardUid, out var card) &&
+            card.Organization == comp.Organization &&
+            (card.AccessMask & (1 << (slot - 1))) != 0;
+    }
+
+    private void RefreshAdvancedConfiguratorUi(EntityUid uid, OrganizationOutpostConfiguratorComponent comp,
+        EntityEventArgs args)
+        => RefreshAdvancedConfiguratorUi(uid, comp);
+
+    private void RefreshAdvancedConfiguratorUi(EntityUid uid, OrganizationOutpostConfiguratorComponent comp)
+    {
+        if (!comp.AdvancedUi || !_organizations.TryGetValue(comp.Organization, out var org))
+            return;
+        var slots = org.AccessProfiles
+            .Where(a => a.Slot is >= 1 and <= MaxOrganizationAccessSlots)
+            .OrderBy(a => a.Slot)
+            .Select(a => new OrganizationOutpostConfiguratorSlotEntry(a.Slot, a.Title,
+                HasAuthorizedConfiguratorCard(comp, a.Slot)))
+            .ToArray();
+        var cardName = comp.CardSlot.Item is { } card && !TerminatingOrDeleted(card)
+            ? MetaData(card).EntityName : "Не вставлено";
+        var targetName = comp.TargetDoor.Valid && !TerminatingOrDeleted(comp.TargetDoor)
+            ? MetaData(comp.TargetDoor).EntityName : "Не вибрано двері";
+        _ui.SetUiState(uid, OrganizationOutpostConfiguratorUiKey.Key,
+            new OrganizationOutpostConfiguratorUiState(targetName, cardName,
+                HasAuthorizedConfiguratorCard(comp, comp.SelectedSlot), comp.SelectedSlot, slots));
+    }
+
+    private void OnAdvancedConfiguratorSelect(EntityUid uid, OrganizationOutpostConfiguratorComponent comp,
+        OrganizationOutpostConfiguratorSelectSlotMessage args)
+    {
+        if (!comp.AdvancedUi || args.Actor is not { Valid: true } actor ||
+            !IsOriginalController(actor) ||
+            !_organizationOutpostInteraction.InRangeUnobstructed(actor, uid) ||
+            !TryGetCharacter(actor, out var key, out _) ||
+            !TryGetOutpostMember(comp.Organization, key, out var org, out var tier) ||
+            tier != OrganizationOutpostAccessTier.Owner ||
+            !HasPurchasedAccessSlot(org, args.Slot) ||
+            !HasAuthorizedConfiguratorCard(comp, args.Slot))
+        {
+            if (args.Actor is { Valid: true } invalidActor)
+                _quotaPopup.PopupEntity("Вставте корпоративну ID-картку з придбаним доступом.",
+                    invalidActor, invalidActor);
+            RefreshAdvancedConfiguratorUi(uid, comp);
+            return;
+        }
+        comp.SelectedSlot = args.Slot;
+        Dirty(uid, comp);
+        var title = org.AccessProfiles.First(a => a.Slot == args.Slot).Title;
+        var door = comp.TargetDoor;
+        if (door.Valid && IsOrganizationConfiguratorTarget(uid, door) &&
+            _organizationOutpostInteraction.InRangeUnobstructed(actor, door))
+        {
+            var access = EnsureComp<OrganizationPropertyAccessReaderComponent>(door);
+            access.Organization = comp.Organization;
+            access.RequiredSlot = args.Slot;
+            EnsureComp<OrganizationDoorAccessMaskComponent>(door).AllowedMask =
+                1 << (args.Slot - 1);
+            Dirty(door, access);
+            if (HasComp<OrganizationOutpostDoorComponent>(door))
+                RemComp<OrganizationOutpostDoorComponent>(door);
+            // The company-only BeforeDoorOpenedEvent verifies the actual ID.
+            // Stock station tags must not reject a valid company ID afterwards.
+            if (TryComp<AccessReaderComponent>(door, out var reader))
+            {
+                reader.AccessLists.Clear();
+                Dirty(door, reader);
+            }
+            _quotaPopup.PopupEntity($"Двері налаштовано: {title}.", actor, actor);
+        }
+        else
+        {
+            _quotaPopup.PopupEntity($"Обрано «{title}». Тепер застосуйте пристрій до дверей.",
+                actor, actor);
+        }
+        RefreshAdvancedConfiguratorUi(uid, comp);
     }
 
     private bool IsOnOwnedOutpost(EntityUid target, Guid orgId)
@@ -114,6 +235,14 @@ public sealed partial class OrganizationSystem
             tier != OrganizationOutpostAccessTier.Owner)
             return;
 
+        if (comp.AdvancedUi)
+        {
+            comp.TargetDoor = target;
+            _ui.OpenUi(token, OrganizationOutpostConfiguratorUiKey.Key, args.User);
+            RefreshAdvancedConfiguratorUi(token, comp);
+            args.Handled = true;
+            return;
+        }
         var access = EnsureComp<OrganizationOutpostDoorComponent>(target);
         access.Organization = comp.Organization;
         access.RequiredTier = comp.SelectedTier;
@@ -126,20 +255,34 @@ public sealed partial class OrganizationSystem
     private void OnOutpostConfiguratorCycle(EntityUid token, OrganizationOutpostConfiguratorComponent comp,
         InteractHandEvent args)
     {
-        if (args.Handled || !IsOriginalController(args.User) ||
+        if (comp.AdvancedUi || args.Handled || !IsOriginalController(args.User) ||
             !TryGetCharacter(args.User, out var key, out _) ||
             !TryGetOutpostMember(comp.Organization, key, out _, out var tier) ||
             tier != OrganizationOutpostAccessTier.Owner)
             return;
-        comp.SelectedTier = comp.SelectedTier switch
+        // Upgrade previously issued legacy configurators in-place as a
+        // controlled item replacement. Those devices use the vanilla station
+        // tag GUI, so merely changing SelectedTier cannot expose paid slots.
+        if (TryComp<Content.Shared.Access.Components.AccessOverriderComponent>(token, out var legacy) &&
+            legacy.PrivilegedIdSlot.HasItem)
         {
-            OrganizationOutpostAccessTier.Member => OrganizationOutpostAccessTier.Deputy,
-            OrganizationOutpostAccessTier.Deputy => OrganizationOutpostAccessTier.Owner,
-            _ => OrganizationOutpostAccessTier.Member
-        };
-        Dirty(token, comp);
+            _quotaPopup.PopupEntity("Спочатку вийміть ID-картку зі старого конфігуратора.",
+                args.User, args.User);
+            args.Handled = true;
+            return;
+        }
+        if (!_prototypes.HasIndex<Robust.Shared.Prototypes.EntityPrototype>("AspisOutpostAccessConfiguratorAdvanced"))
+            return;
+        var upgraded = Spawn("AspisOutpostAccessConfiguratorAdvanced", Transform(args.User).Coordinates);
+        var advanced = EnsureComp<OrganizationOutpostConfiguratorComponent>(upgraded);
+        advanced.Organization = comp.Organization;
+        advanced.AdvancedUi = true;
+        advanced.SelectedSlot = 1;
+        Dirty(upgraded, advanced);
+        QueueDel(token);
         args.Handled = true;
-        _quotaPopup.PopupEntity($"Рівень конфігуратора: {comp.SelectedTier}.", args.User, args.User);
+        _quotaPopup.PopupEntity("Корпоративний конфігуратор оновлено. Новий пристрій поруч із вами.",
+            args.User, args.User);
     }
 
     private void OnConfigureOutpostListing(EntityUid console, OrganizationConsoleComponent component,
@@ -196,7 +339,7 @@ public sealed partial class OrganizationSystem
             Refresh(console, args.Actor, "Недостатньо коштів у скарбниці.");
             return;
         }
-        var proto = args.Configurator ? "AspisOutpostAccessConfigurator" : "AspisOutpostSpawnBeacon";
+        var proto = args.Configurator ? "AccessConfigurator" : "AspisOutpostSpawnBeacon";
         if (!_prototypes.HasIndex<Robust.Shared.Prototypes.EntityPrototype>(proto))
         {
             Refresh(console, args.Actor, "Прототип обладнання аванпосту не завантажений.");
@@ -220,14 +363,7 @@ public sealed partial class OrganizationSystem
             Refresh(console, args.Actor, "Не вдалося зберегти оплату. Обладнання не видано.");
             return;
         }
-        if (args.Configurator)
-        {
-            var token = EnsureComp<OrganizationOutpostConfiguratorComponent>(item);
-            token.Organization = org.Id;
-            token.SelectedTier = OrganizationOutpostAccessTier.Member;
-            Dirty(item, token);
-        }
-        else
+        if (!args.Configurator)
         {
             var beacon = EnsureComp<OrganizationOutpostSpawnBeaconComponent>(item);
             beacon.Organization = org.Id;
@@ -236,7 +372,7 @@ public sealed partial class OrganizationSystem
             Dirty(item, beacon);
         }
         Refresh(console, args.Actor, args.Configurator
-            ? "Карту-конфігуратор видано. Вона не є ID-карткою та не видає станційних доступів."
+            ? "Видано стандартний конфігуратор доступів. Вставте ID компанії, застосуйте до дверей і оберіть корпоративний доступ."
             : "Маяк видано. Розмістіть на підлозі аванпосту й активуйте. Для появи у наступних раундах додайте маяк до підписаного креслення.");
     }
 

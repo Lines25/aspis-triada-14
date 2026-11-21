@@ -1,0 +1,72 @@
+# Native CardinalFlags smoothing (north=1 south=2 east=4 west=8) updates
+# neighbouring field patches whenever one is removed/anchored.
+- type: entity
+  id: AspisWheatPatch
+  name: пшениця
+  description: Суцільне стигле пшеничне поле.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+    anchored: true
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/wheat_field.rsi
+    state: wheat_15
+    drawdepth: HighFloorObjects
+  - type: IconSmooth
+    key: aspis-wheatlands
+    base: wheat_
+    mode: CardinalFlags
+  - type: AspisWheatPatch
+  - type: SpeedModifierContacts
+    walkSpeedModifier: 0.85
+    sprintSpeedModifier: 0.85
+  - type: Physics
+    bodyType: Static
+  - type: Fixtures
+    fixtures:
+      fix1:
+        shape:
+          !type:PhysShapeAabb
+          bounds: "-0.5,-0.5,0.5,0.5"
+        layer:
+        - SlipLayer
+        mask:
+        - ItemMask
+        density: 1000
+        hard: false
+  - type: Reactive
+    groups:
+      Flammable: [ Touch ]
+      Extinguish: [ Touch ]
+  - type: FootstepModifier
+    footstepSoundCollection:
+      collection: AspisStepWheat
+      params:
+        volume: 8
+  - type: StepTrigger
+    requiredTriggeredSpeed: 0
+    intersectRatio: 0.1
+    blacklist:
+      tags:
+      - Catwalk
+  - type: Flammable
+    fireSpread: true
+    alwaysCombustible: true
+    canExtinguish: true
+    damage:
+      types:
+        Heat: 2.5
+  - type: FireVisuals
+    sprite: Effects/fire.rsi
+    normalState: fire
+  - type: Damageable
+    damageModifierSet: Wood
+  - type: Destructible
+    thresholds:
+    - trigger:
+        !type:DamageTrigger
+        damage: 20
+      behaviors:
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]
+

@@ -17,12 +17,15 @@ namespace Content.Server._Aspis.Organizations;
 /// </summary>
 public sealed partial class OrganizationSystem
 {
-    private sealed class SectorQuotaOffer(int units, int minutes, int[] postTargets, int pharmaceuticalVariant, int scenarioVariant = 0)
+    private sealed class SectorQuotaOffer(int units, int minutes, int[] postTargets, int pharmaceuticalVariant,
+        QuotaScenarioDefinition scenario, int estimatedWorkMinutes, int scenarioVariant = 0)
     {
         public readonly int Units = units;
         public readonly int Minutes = minutes;
         public readonly int[] PostTargets = postTargets;
         public readonly int PharmaceuticalVariant = pharmaceuticalVariant;
+        public readonly QuotaScenarioDefinition Scenario = scenario;
+        public readonly int EstimatedWorkMinutes = estimatedWorkMinutes;
         public readonly int ScenarioVariant = scenarioVariant;
     }
 
@@ -46,6 +49,11 @@ public sealed partial class OrganizationSystem
         public readonly TimeSpan Deadline = deadline;
         public readonly int Units = offer.Units;
         public readonly int TimeLimitMinutes = offer.Minutes;
+        // Freeze the entire offer so later catalog updates and faction rerolls cannot
+        // mutate a contract that was already accepted.
+        public readonly SectorQuotaOffer Offer = offer;
+        public readonly QuotaScenarioDefinition Scenario = offer.Scenario;
+        public readonly int EstimatedWorkMinutes = offer.EstimatedWorkMinutes;
         public readonly int[] PostTargets = (int[]) offer.PostTargets.Clone();
         public readonly int PharmaceuticalVariant = offer.PharmaceuticalVariant;
         public readonly int FactionScenarioVariant = offer.ScenarioVariant;
@@ -107,6 +115,12 @@ public sealed partial class OrganizationSystem
         public TimeSpan FactionKitLastOrderedAt;
         public EntityUid? FactionKitInvoice;
         public readonly HashSet<string> RejectedPharmaceuticalReferences = new(StringComparer.Ordinal);
+        // Q2: server-issued instrument; never serialized to the organization store.
+        public EntityUid? InspectionScanner;
+        // Frontier route state is contract-local; it must not be persisted to OrganizationStore.
+        public EntityUid? FrontierNavigator;
+        public bool FrontierDeparted;
+        public bool FrontierReturned;
         public int Delivered => DeliveredByPost.Sum();
     }
 
@@ -114,79 +128,89 @@ public sealed partial class OrganizationSystem
     // One shared offer per category/difficulty/round. Refreshing a console never re-rolls it.
     private readonly Dictionary<(OrganizationKind Kind, int Category, int Slot), SectorQuotaOffer> _sectorQuotaOffers = new();
 
-    private SectorQuotaOffer GetOrCreateQuotaOffer(OrganizationKind kind, int category, int slot)
+    private SectorQuotaOffer? GetOrCreateQuotaOffer(OrganizationKind kind, int category, int slot)
     {
+        if (slot is < 0 or >= OrganizationQuotaRules.SlotsPerCategory)
+            return null;
         var id = (kind, category, slot);
-        if (_sectorQuotaOffers.TryGetValue(id, out var offer))
-            return offer;
+        if (_sectorQuotaOffers.TryGetValue(id, out var cached))
+            return cached;
+
+        // Never publish a contract without an authenticated waybill prototype.
+        if ((kind == OrganizationKind.Company || slot == 0) &&
+            !_prototypes.HasIndex<Robust.Shared.Prototypes.EntityPrototype>(QuotaManifestPrototype))
+            return null;
+        var workflow = OrganizationQuotaRules.WorkflowFor(kind, (OrganizationIndustry) category);
         if (kind == OrganizationKind.Faction)
         {
-            // Server-side scenario is frozen per offer, and copied to the claim.
-            // Four actual difficulty grades. The planetary deployment is grade I;
-            // the three survey variants use progressively tougher sites.
-            offer = new SectorQuotaOffer(slot == 0 ? 4 : Math.Min(10, 3 + slot * 2),
-                slot switch { 0 => 90, 1 => 60, 2 => 80, _ => 100 },
-                [0, 0, 0, 0], 0, _random.Next(0, 6));
-            _sectorQuotaOffers.Add(id, offer);
-            return offer;
+            // Existing physical workflows remain intact: tier I uses a relay;
+            // tiers II-IV use the dedicated wreck inspection pipeline.
+            var units = slot == 0 ? 4 : Math.Min(10, 3 + slot * 2);
+            var legacyMinutes = slot switch { 0 => 90, 1 => 60, 2 => 80, _ => 100 };
+            if (!TryChooseQuotaScenario(kind, workflow, slot, units, legacyMinutes, 0,
+                    out var factionScenario, out var work, out var deadline))
+                return null;
+            var factionOffer = new SectorQuotaOffer(units, deadline, [0, 0, 0, 0], 0,
+                factionScenario, work, _random.Next(0, 6));
+            _sectorQuotaOffers.Add(id, factionOffer);
+            return factionOffer;
         }
-        // A research shipment requires genuine disks, while mining and farming
-        // require filled crates. Do not price either as 40 empty logistics crates.
-        var workflow = kind == OrganizationKind.Faction
-            ? OrganizationQuotaWorkflow.SectorService
-            : OrganizationQuotaRules.WorkflowFor(kind, (OrganizationIndustry) category);
+
+        // Q1 only exposes workflows with a current server-side physical proof.
+        // Security and Services will get their own proofs in Q2 rather than phantom payouts.
+        if (workflow == OrganizationQuotaWorkflow.SectorService ||
+            workflow == OrganizationQuotaWorkflow.MedicalTreatment)
+            return null;
         var minimum = workflow switch
         {
             OrganizationQuotaWorkflow.ResearchExport => Math.Max(1, slot + 1),
-            OrganizationQuotaWorkflow.MedicalTreatment => Math.Max(1, slot + 1),
             OrganizationQuotaWorkflow.PharmaceuticalExport => slot switch { 0 => 2, 1 => 2, 2 => 2, _ => 1 },
+            OrganizationQuotaWorkflow.AgriculturalExport => 1,
             _ => OrganizationQuotaRules.MinimumUnits(slot)
         };
         var maximum = workflow switch
         {
             OrganizationQuotaWorkflow.ResearchExport => (slot + 1) * 2,
-            OrganizationQuotaWorkflow.MedicalTreatment => slot + 2,
             OrganizationQuotaWorkflow.PharmaceuticalExport => slot switch { 0 => 4, 1 => 4, 2 => 4, _ => 3 },
+            OrganizationQuotaWorkflow.AgriculturalExport => 1,
             _ => OrganizationQuotaRules.MaximumUnits(slot)
         };
-        var units = _random.Next(minimum, maximum + 1);
-        // This is a server-side selection from *loaded* reagent prototypes.
-        // The menu never offers a formulation that exists only in this C# list.
+        var unitsToDeliver = _random.Next(minimum, maximum + 1);
         var pharmaceuticalVariant = workflow == OrganizationQuotaWorkflow.PharmaceuticalExport
             ? ChoosePharmaceuticalVariant(slot) : 0;
-        var minutes = workflow switch
-        {
-            OrganizationQuotaWorkflow.PharmaceuticalExport => 50 + slot * 20 +
-                units * 5 + _random.Next(0, 4) * 5 +
-                OrganizationQuotaRules.PharmaceuticalExtraMinutes(pharmaceuticalVariant, slot),
-            OrganizationQuotaWorkflow.MedicalTreatment => 45 + slot * 20 + _random.Next(0, 4) * 5,
-            _ => OrganizationQuotaRules.TimeLimitForUnits(slot, units, _random.Next(0, 4))
-        };
+        if (pharmaceuticalVariant < 0)
+            return null; // Missing reagent or missing real synthesis route.
+        var legacy = workflow == OrganizationQuotaWorkflow.PharmaceuticalExport
+            ? 50 + slot * 20 + unitsToDeliver * 5 + _random.Next(0, 4) * 5 +
+              OrganizationQuotaRules.PharmaceuticalExtraMinutes(pharmaceuticalVariant, slot)
+            : OrganizationQuotaRules.TimeLimitForUnits(slot, unitsToDeliver, _random.Next(0, 4));
+        if (!TryChooseQuotaScenario(kind, workflow, slot, unitsToDeliver, legacy,
+                pharmaceuticalVariant, out var selected, out var expected, out var minutes))
+            return null;
+
         var targets = new int[4];
         if (workflow == OrganizationQuotaWorkflow.CargoDelivery)
         {
-            // Logistics uses stable, randomized destinations. Exports use verified
-            // cargo content instead of A-D delivery targets.
-            var numberOfPosts = _random.Next(2, Math.Min(4, units) + 1);
+            // Different delivery scenarios have actual, distinct physical A-D routes.
+            var numberOfPosts = _random.Next(selected.MinDestinations,
+                Math.Min(selected.MaxDestinations, unitsToDeliver) + 1);
             var firstPost = _random.Next(0, 5 - numberOfPosts);
             for (var i = 0; i < numberOfPosts; i++)
                 targets[firstPost + i] = 1;
-            for (var i = numberOfPosts; i < units; i++)
+            for (var i = numberOfPosts; i < unitsToDeliver; i++)
                 targets[firstPost + _random.Next(numberOfPosts)]++;
         }
         else if (workflow == OrganizationQuotaWorkflow.PharmaceuticalExport)
         {
-            // A pharmacy consignment has one physical receiving station. This
-            // destination is the same for every company competing for the offer.
-            targets[_random.Next(0, 4)] = units;
+            targets[_random.Next(0, 4)] = unitsToDeliver;
         }
         else
         {
-            targets[0] = units;
+            targets[0] = unitsToDeliver;
         }
-        // The formulation belongs to the shared offer, never to the company
-        // claiming it or to a client-side random roll.
-        offer = new SectorQuotaOffer(units, minutes, targets, pharmaceuticalVariant);
+        // No reroll on board refresh; the whole offer is shared by competing companies.
+        var offer = new SectorQuotaOffer(unitsToDeliver, minutes, targets,
+            pharmaceuticalVariant, selected, expected);
         _sectorQuotaOffers.Add(id, offer);
         return offer;
     }
@@ -270,6 +294,7 @@ public sealed partial class OrganizationSystem
             }
             if (claim.Completed || now < claim.Deadline)
                 continue;
+            CleanupQuotaInspectionScanner(claim);
             if (pair.Key.Kind == OrganizationKind.Faction)
             {
                 RemoveFactionOperationObjects(claim);
@@ -309,31 +334,32 @@ public sealed partial class OrganizationSystem
                         : _factionPlanetMapsCreatedThisRound >= MaxFactionPlanetMapsPerRound))
                     continue;
 
-                var offer = GetOrCreateQuotaOffer(org.Kind, category, slot);
+                var offer = claim?.Offer ?? GetOrCreateQuotaOffer(org.Kind, category, slot);
+                if (offer == null)
+                    continue; // No real proof pipeline or workload does not fit the deadline.
                 var units = claim?.Units ?? offer.Units;
                 var minutes = claim?.TimeLimitMinutes ?? offer.Minutes;
                 var mine = claim != null && claim.Organization == org.Id;
-                var workflow = OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry);
-                var pharmaceutical = workflow == OrganizationQuotaWorkflow.PharmaceuticalExport;
+                var workflow = offer.Scenario.Workflow;
                 var variant = claim?.PharmaceuticalVariant ?? offer.PharmaceuticalVariant;
-                if (pharmaceutical && variant < 0)
-                    continue; // Do not show a recipe unavailable on this server.
                 var faction = org.Kind == OrganizationKind.Faction;
-                var scenario = claim?.FactionScenarioVariant ?? offer.ScenarioVariant;
+                var factionVariant = claim?.FactionScenarioVariant ?? offer.ScenarioVariant;
                 entries.Add(new OrganizationQuotaEntry(category, slot,
-                    faction ? (slot > 0 ? FactionWreckTitle((OrganizationFactionFocus)category, mine ? claim : null, scenario) : FactionAntennaTitle(org, scenario)) : pharmaceutical ? OrganizationQuotaRules.PharmaceuticalTitle(slot, variant) :
-                        OrganizationQuotaRules.Title(org.Kind, org.Industry, category, slot),
-                    faction ? (slot > 0 ? FactionWreckDescription((OrganizationFactionFocus)category, mine ? claim : null, scenario) : FactionAntennaDescription(org, claim, scenario)) : pharmaceutical ?
-                        OrganizationQuotaRules.PharmaceuticalDescription(slot, units, variant) :
-                        OrganizationQuotaRules.DescriptionForUnits(org.Kind, org.Industry, category, slot, units),
+                    faction ? (slot > 0 ? FactionWreckTitle((OrganizationFactionFocus)category, mine ? claim : null, factionVariant) : FactionAntennaTitle(org, factionVariant)) :
+                        QuotaCompanyScenarioTitle(offer.Scenario, org.Industry, category, slot, variant),
+                    faction ? (slot > 0 ? FactionWreckDescription((OrganizationFactionFocus)category, mine ? claim : null, factionVariant) : FactionAntennaDescription(org, claim, factionVariant)) :
+                        QuotaCompanyScenarioDescription(offer.Scenario, org.Industry, category, slot,
+                            units, variant, offer.PostTargets, offer.EstimatedWorkMinutes),
                     (faction && slot > 0 ?
                         FactionWreckWorkflow(mine ? claim!.FactionWreckActivity :
                             FactionWreckActivityFor((OrganizationFactionFocus)category)) :
                         OrganizationQuotaRules.WorkflowName(workflow)), units,
                     OrganizationQuotaRules.IncomeBonusPercent(slot),
-                    OrganizationQuotaRules.InfluenceBasisPoints(slot), mine, mine && claim!.Completed)
+                    QuotaWorkloadInfluenceBp(workflow, slot), mine, mine && claim!.Completed)
                 {
                     Workflow = workflow,
+                    ScenarioId = offer.Scenario.Id,
+                    EstimatedWorkMinutes = offer.EstimatedWorkMinutes,
                     Code = mine ? claim!.Code : string.Empty,
                     AssignedTo = mine ? claim!.AssigneeName : string.Empty,
                     AssignedToMe = mine && claim!.Assignee == viewer,
@@ -348,7 +374,7 @@ public sealed partial class OrganizationSystem
                         ? (slot > 0 ? FactionWreckLocation(claim!) : FactionSiteDescription(claim!, viewer))
                         : string.Empty,
                     FactionAuthorityPoints = org.FactionAuthorityPoints,
-                    EstimatedReward = faction ? 0 : EstimateQuotaNetReward(org, slot, units, variant),
+                    EstimatedReward = faction ? 0 : EstimateQuotaNetReward(org, slot, units, variant, offer.Scenario),
                     SecondsRemaining = mine ? Math.Max(0, (int)(claim!.Deadline - _gameTiming.CurTime).TotalSeconds) :
                         minutes * 60,
                     Delivered = mine ? (faction ? (slot > 0
@@ -445,11 +471,31 @@ public sealed partial class OrganizationSystem
             return;
         }
         var offer = GetOrCreateQuotaOffer(org.Kind, args.Category, args.Slot);
-        if (OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry) ==
-            OrganizationQuotaWorkflow.PharmaceuticalExport && offer.PharmaceuticalVariant < 0)
+        if (offer == null)
         {
-            Refresh(uid, args.Actor, "Сервер не має реагентів для цього рецепта.");
+            Refresh(uid, args.Actor, "Немає доступного сценарію з реальним підтвердженням виконання.");
             return;
+        }
+        // Fail closed when physical delivery infrastructure has not spawned.
+        if (org.Kind == OrganizationKind.Company &&
+            offer.Scenario.Workflow is OrganizationQuotaWorkflow.CargoDelivery or
+                OrganizationQuotaWorkflow.PharmaceuticalExport)
+        {
+            // Dispatching commercial Cargo requests currently requires post D.
+            if (offer.Scenario.Workflow == OrganizationQuotaWorkflow.CargoDelivery &&
+                !_quotaCargoSystem.TryGetQuotaTradeDestination(3, out _))
+            {
+                Refresh(uid, args.Actor, "Центральний вантажний термінал D зараз недоступний.");
+                return;
+            }
+            for (var post = 0; post < offer.PostTargets.Length; post++)
+            {
+                if (offer.PostTargets[post] <= 0 ||
+                    _quotaCargoSystem.TryGetQuotaTradeDestination(post, out _))
+                    continue;
+                Refresh(uid, args.Actor, $"Торговий пост {(char)('A' + post)} зараз недоступний.");
+                return;
+            }
         }
         var code = $"QT-{(int)org.Kind:X1}-{args.Category:X2}-{args.Slot + 1}-{++_roundQuotaSerial:X5}";
         var deadline = _gameTiming.CurTime + TimeSpan.FromMinutes(offer.Minutes);
@@ -467,6 +513,20 @@ public sealed partial class OrganizationSystem
             return;
         }
         _sectorQuotaClaims[id] = newClaim;
+            // Q2.5D: only the fifth planetary agro claim receives special gear.
+            if (org.Kind == OrganizationKind.Company &&
+                org.Industry == OrganizationIndustry.Agriculture)
+            {
+                if (!TryIssueAspisAgroQuotaEquipment(args.Actor, out var equipmentError))
+                {
+                    _sectorQuotaClaims.Remove(id);
+                    Refresh(uid, args.Actor, $"Не вдалося видати аграрне обладнання: {equipmentError}");
+                    return;
+                }
+            }
+        if (org.Kind == OrganizationKind.Company &&
+            (org.Industry != OrganizationIndustry.Agriculture || args.Slot != AspisPlanetaryAgriculturalSlot))
+            IssueQuotaInspectionScanner(args.Actor, newClaim);
         if (org.Kind == OrganizationKind.Faction)
         {
             // The next offer may have a new story, without rerolling the active job.
@@ -518,6 +578,7 @@ public sealed partial class OrganizationSystem
             // round. Prevent accept/cancel loops from spawning safe FTL havens.
             ScheduleNextFactionTask(org);
         }
+        CleanupQuotaInspectionScanner(claim);
         _sectorQuotaClaims.Remove(id);
         RefreshSectorQuotaSubscribers(uid, args.Actor,
             org.Kind == OrganizationKind.Faction
@@ -558,10 +619,11 @@ public sealed partial class OrganizationSystem
         if (!_sectorQuotaClaims.TryGetValue(key, out var claim) || claim.Completed ||
             _gameTiming.CurTime >= claim.Deadline ||
             claim.ProcessedCargoReferences.Contains(cargoReference) ||
-            (OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry) ==
-                OrganizationQuotaWorkflow.CargoDelivery && claim.Delivered >= claim.CargoRequestedCrates))
+            claim.Scenario.Proof is not (QuotaProofKind.CargoRoute or QuotaProofKind.VerifiedExport) ||
+            (claim.Scenario.Workflow == OrganizationQuotaWorkflow.CargoDelivery &&
+                claim.Delivered >= claim.CargoRequestedCrates))
             return false;
-        var workflow = OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry);
+        var workflow = claim.Scenario.Workflow;
         var hasDestination = workflow is OrganizationQuotaWorkflow.CargoDelivery or
             OrganizationQuotaWorkflow.PharmaceuticalExport;
         if (hasDestination ? (post is < 0 or > 3) : post != 0)
@@ -580,6 +642,7 @@ public sealed partial class OrganizationSystem
         claim.Completed = finalDelivery;
         if (finalDelivery)
         {
+            CleanupQuotaInspectionScanner(claim);
             // The physical completion and economic settlement are independent:
             // a daily sector limit must never erase delivered cargo.
             claim.SettlementPending = !TryPayVerifiedQuota(org, key.Slot, key.Category, code, claim.Units,
@@ -594,32 +657,40 @@ public sealed partial class OrganizationSystem
         return true;
     }
 
+    // Workload-balanced company quotas. Preliminary estimates use completion
+    // time, specialist complexity and risk; actual rewards still respect sector
+    // demand and per-company revenue ceilings (see TryPayVerifiedQuota).
     private static int QuotaEffortPercent(OrganizationQuotaWorkflow workflow) => workflow switch
     {
-        OrganizationQuotaWorkflow.ResearchExport => 200,
-        OrganizationQuotaWorkflow.MiningExport => 160,
-        OrganizationQuotaWorkflow.TradeExport => 120,
-        OrganizationQuotaWorkflow.MedicalTreatment => 180,
-        OrganizationQuotaWorkflow.PharmaceuticalExport => 260,
-        OrganizationQuotaWorkflow.AgriculturalExport => 140,
-        OrganizationQuotaWorkflow.IndustrialExport => 130,
         OrganizationQuotaWorkflow.CargoDelivery => 100,
+        OrganizationQuotaWorkflow.TradeExport => 130,
+        OrganizationQuotaWorkflow.ResearchExport => 180,
+        OrganizationQuotaWorkflow.MiningExport => 220,
+        OrganizationQuotaWorkflow.AgriculturalExport => 170,
+        OrganizationQuotaWorkflow.IndustrialExport => 220,
+        OrganizationQuotaWorkflow.PharmaceuticalExport => 290,
+        OrganizationQuotaWorkflow.ConstructionYard => 360,
+        OrganizationQuotaWorkflow.MedicalTreatment => 220,
         _ => 110
     };
+
+    private static int QuotaWorkloadInfluenceBp(OrganizationQuotaWorkflow workflow, int slot) =>
+        Math.Clamp((OrganizationQuotaRules.InfluenceBasisPoints(slot) *
+            QuotaEffortPercent(workflow) + 50) / 100, 1, 40);
 
     // A read-only estimate: don't consume random incident rolls while drawing the UI.
     // Actual settlement includes variable operating costs, sector demand and daily cap.
     private int EstimateQuotaNetReward(Organization org, int slot, int units,
-        int pharmaceuticalVariant = 0)
+        int pharmaceuticalVariant = 0, QuotaScenarioDefinition? scenario = null)
     {
         if (org.Kind != OrganizationKind.Company)
             return 300 + units * 65;
-        var workflow = OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry);
+        var workflow = scenario?.Workflow ?? OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry);
         var effort = QuotaEffortPercent(workflow);
         var premium = workflow == OrganizationQuotaWorkflow.PharmaceuticalExport
             ? 100 + OrganizationQuotaRules.PharmaceuticalPremiumPercent(pharmaceuticalVariant, slot) : 100;
         var baseGross = (long)DeliveryPrice(org) * units * (100 + slot * 20) * effort / 10_000
-            * premium / 100;
+            * premium / 100 * (scenario?.RewardPercent ?? 100) / 100;
         var remaining = Math.Max(0, Math.Min(AvailableSectorDemand(),
             DailyCompanyRevenueLimit - org.DailyGrossRevenue));
         // 150 credits approximate a normal dispatch cost; never treat this as guaranteed pay.
@@ -629,17 +700,17 @@ public sealed partial class OrganizationSystem
     private bool TryPayVerifiedQuota(Organization org, int slot, int category, string code, int units,
         int qualityPercent = 100)
     {
-        var workflow = OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry);
+        var assigned = _sectorQuotaClaims.Values.FirstOrDefault(c => c.Organization == org.Id && c.Code == code);
+        var workflow = assigned?.Scenario.Workflow ?? OrganizationQuotaRules.WorkflowFor(org.Kind, org.Industry);
         var effortPercent = QuotaEffortPercent(workflow);
         var variant = workflow == OrganizationQuotaWorkflow.PharmaceuticalExport
-            ? (_sectorQuotaClaims.Values.FirstOrDefault(c => c.Organization == org.Id &&
-                c.Code == code)?.PharmaceuticalVariant ?? 0)
-            : 0;
+            ? assigned?.PharmaceuticalVariant ?? 0 : 0;
         var premium = workflow == OrganizationQuotaWorkflow.PharmaceuticalExport
             ? 100 + OrganizationQuotaRules.PharmaceuticalPremiumPercent(variant, slot) : 100;
+        var scenarioPercent = assigned?.Scenario.RewardPercent ?? 100;
         var gross = org.Kind == OrganizationKind.Company
             ? (int)Math.Min((long)DeliveryPrice(org) * units * (100 + slot * 20) * effortPercent /
-                10_000 * premium / 100,
+                10_000 * premium / 100 * scenarioPercent / 100,
                 Math.Max(0, Math.Min(AvailableSectorDemand(), DailyCompanyRevenueLimit - org.DailyGrossRevenue)))
             : 300 + units * 65;
         // Incomplete pharmaceutical kits discount THIS contract rather than
@@ -687,7 +758,7 @@ public sealed partial class OrganizationSystem
             var free = Math.Max(0, MarketCapacityBp -
                 _organizations.Values.Sum(o => o.SectorInfluenceBp));
             org.SectorInfluenceBp += Math.Min(free,
-                OrganizationQuotaRules.InfluenceBasisPoints(slot));
+                QuotaWorkloadInfluenceBp(workflow, slot));
         }))
             return false;
         _adminLog.Add(LogType.Action, LogImpact.Medium,

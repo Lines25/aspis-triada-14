@@ -21,6 +21,12 @@
     - map: ["computerLayerKeys"]
       state: generic_keys
   - type: OrganizationConsole
+  - type: OrganizationConsoleLeaseSlot
+  - type: ItemSlots
+  - type: ContainerContainer
+    containers:
+      board: !type:Container
+      Aspis-OrganizationConsole-LeaseId: !type:ContainerSlot
   - type: ActivatableUI
     key: enum.OrganizationConsoleUiKey.Key
     singleUser: true

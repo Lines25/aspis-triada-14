@@ -180,7 +180,7 @@ public sealed partial class OrganizationSystem
 
     private static string FactionWreckLocation(SectorQuotaClaim claim) =>
         claim.FactionWreckMap != null
-            ? $"FTL: {claim.FactionWreckName} · окрема мапа поточного раунду"
+            ? $"FTL: {claim.FactionWreckName} — окрема мапа поточного раунду"
             : "Об'єкт ще не створено";
 
     private static string FactionWreckDescription(OrganizationFactionFocus focus,

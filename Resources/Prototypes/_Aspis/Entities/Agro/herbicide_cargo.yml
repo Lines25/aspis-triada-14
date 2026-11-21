@@ -1,0 +1,39 @@
+# Physical canisters retrieved from the authored agrostation and loaded onto a shuttle.
+- type: entity
+  parent: BaseItem
+  id: AspisAgroHerbicideFlask
+  name: гербіцид, скляна колба
+  description: Зразок агрономічного реагенту. Доставте його до приймача на шатлі.
+  components:
+  - type: Sprite
+    sprite: _Aspis/Objects/Agro/herbicide_canisters.rsi
+    state: herbicide_flask
+  - type: Item
+    size: Small
+  - type: AspisAgroCargo
+
+- type: entity
+  parent: BaseItem
+  id: AspisAgroReinforcedVial
+  name: гербіцид, армована скляна колба
+  description: Посилена скляна капсула з маркованим агрономічним реагентом.
+  components:
+  - type: Sprite
+    sprite: _Aspis/Objects/Agro/herbicide_canisters.rsi
+    state: herbicide_reinforced
+  - type: Item
+    size: Small
+  - type: AspisAgroCargo
+
+- type: entity
+  id: AspisAgroReceiver
+  parent: BaseMachine
+  name: модуль приймання агрономічних реагентів
+  description: Застарілий приймач. Для заправлення використовуйте один встановлений розпилювач.
+  components:
+  - type: Sprite
+    sprite: Structures/Machines/Medical/electrolysis.rsi
+    state: base
+  - type: AspisAgroReceiver
+  - type: Transform
+    anchored: true

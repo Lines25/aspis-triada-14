@@ -1,0 +1,13 @@
+# Aspis Wheatlands: permanent, chunk-streamed crop tile (no per-tile ECS entities).
+- type: tile
+  id: FloorAspisWheat
+  name: пшеничне поле
+  sprite: /Textures/_Aspis/Tiles/wheat_ground.png
+  variants: 1
+  isSubfloor: true
+  baseTurf: FloorDesert
+  footstepSounds:
+    collection: AspisStepWheat
+  barestepSounds:
+    collection: AspisStepWheat
+  weather: true

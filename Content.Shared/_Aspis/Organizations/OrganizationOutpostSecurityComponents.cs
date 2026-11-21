@@ -1,7 +1,9 @@
 using System;
 using System.Numerics;
+using Content.Shared.Containers.ItemSlots;
 using Robust.Shared.GameObjects;
 using Robust.Shared.GameStates;
+using Robust.Shared.Serialization;
 
 namespace Content.Shared._Aspis.Organizations;
 
@@ -17,7 +19,7 @@ public enum OrganizationOutpostAccessTier : byte
 [RegisterComponent, NetworkedComponent]
 public sealed partial class OrganizationOutpostDoorComponent : Component
 {
-    [DataField] public Guid Organization;
+    public Guid Organization;
     [DataField] public OrganizationOutpostAccessTier RequiredTier = OrganizationOutpostAccessTier.Member;
 }
 
@@ -25,15 +27,21 @@ public sealed partial class OrganizationOutpostDoorComponent : Component
 [RegisterComponent, NetworkedComponent]
 public sealed partial class OrganizationOutpostConfiguratorComponent : Component
 {
-    [DataField] public Guid Organization;
+    public Guid Organization;
+    // Legacy tier retained for existing printed devices and saved maps.
     [DataField] public OrganizationOutpostAccessTier SelectedTier = OrganizationOutpostAccessTier.Member;
+    [DataField] public bool AdvancedUi;
+    [DataField] public int SelectedSlot = 1;
+    public EntityUid TargetDoor = EntityUid.Invalid; // Round-local, never save target from YAML
+    public const string CardSlotId = "AspisOutpostAccessConfigurator-card";
+    [DataField] public ItemSlot CardSlot = new();
 }
 
 /// <summary>Saved inside a ship blueprint. Organization is bound on grid load, never trusted from YAML.</summary>
 [RegisterComponent, NetworkedComponent]
 public sealed partial class OrganizationOutpostSpawnBeaconComponent : Component
 {
-    [DataField] public Guid Organization;
+    public Guid Organization;
     [DataField] public OrganizationOutpostAccessTier Tier;
     // Round-local verification only. Never trust a saved true from a player ship file.
     public bool Validated;
@@ -45,4 +53,34 @@ public sealed class OrganizationOutpostAccessCheckEvent(EntityUid user) : Entity
 {
     public EntityUid User = user;
     public bool Authorized;
+}
+
+/// <summary>Separate from the stock access-configurator GUI: company-local slots are not station tags.</summary>
+[Serializable, NetSerializable]
+public enum OrganizationOutpostConfiguratorUiKey : byte { Key }
+
+[Serializable, NetSerializable]
+public sealed class OrganizationOutpostConfiguratorSlotEntry(int slot, string title, bool available)
+{
+    public int Slot = slot;
+    public string Title = title;
+    public bool Available = available;
+}
+
+[Serializable, NetSerializable]
+public sealed class OrganizationOutpostConfiguratorUiState(
+    string targetName, string cardName, bool authorized, int selectedSlot,
+    OrganizationOutpostConfiguratorSlotEntry[] slots) : BoundUserInterfaceState
+{
+    public string TargetName = targetName;
+    public string CardName = cardName;
+    public bool Authorized = authorized;
+    public int SelectedSlot = selectedSlot;
+    public OrganizationOutpostConfiguratorSlotEntry[] Slots = slots;
+}
+
+[Serializable, NetSerializable]
+public sealed class OrganizationOutpostConfiguratorSelectSlotMessage(int slot) : BoundUserInterfaceMessage
+{
+    public int Slot = slot;
 }

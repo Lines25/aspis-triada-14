@@ -1,0 +1,17 @@
+# Q2: server-registered instrument for audited commercial quota scenarios.
+# An instrument is spawned only for a server-accepted active quota; public spawn
+# menu access is disabled, and its organization+contract identity is server-only.
+- type: entity
+  parent: BaseItem
+  id: AspisQuotaInspectionScanner
+  name: інспекційний сканер вантажів
+  description: Наведіть на промаркований ящик активної квоти й використайте. Зміна вмісту після перевірки скасовує її результат.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _NF/Objects/Tools/multitool.rsi
+    state: icon
+    color: "#9DD7D4"
+  - type: Item
+    size: Small
+  - type: OrganizationQuotaInspectionScanner

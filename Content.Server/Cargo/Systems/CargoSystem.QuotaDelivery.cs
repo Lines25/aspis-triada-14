@@ -14,13 +14,15 @@ namespace Content.Server.Cargo.Systems;
 /// </summary>
 public sealed partial class CargoSystem
 {
-    private sealed class QuotaOrderAuthorization(Guid organization, string code, int total, int start, int[] postTargets)
+    private sealed class QuotaOrderAuthorization(Guid organization, string code, int total, int start,
+        int[] postTargets, bool frontier)
     {
         public readonly Guid Organization = organization;
         public readonly string Code = code;
         public readonly int Total = total;
         public readonly int Start = start;
         public readonly int[] PostTargets = postTargets;
+        public readonly bool Frontier = frontier;
     }
 
     private const string QuotaTradeCratePrototype = "CrateTradeSecureNormal";
@@ -107,8 +109,9 @@ public sealed partial class CargoSystem
         tag.Reference = $"CRATE-{Guid.NewGuid():N}";
         tag.Post = post;
         tag.DestinationStation = destination;
-        _metaSystem.SetEntityName(crate,
-            $"Квота {authorization.Code} | Пост {(char)('A' + post)} | {MetaData(destination).EntityName}");
+        _metaSystem.SetEntityName(crate, authorization.Frontier
+            ? $"Далекий рубіж: {(char)('A' + post)} — {authorization.Code}"
+            : $"Квота {authorization.Code} | Пост {(char)('A' + post)} | {MetaData(destination).EntityName}");
         _adminLogger.Add(Content.Shared.Database.LogType.Action, Content.Shared.Database.LogImpact.Low,
             $"Quota crate dispatched: {tag.Reference} code={tag.Code} post={(char)('A' + post)} destination={destination}");
     }

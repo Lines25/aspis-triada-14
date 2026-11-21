@@ -101,24 +101,24 @@ public sealed partial class OrganizationSystem
     {
         if (!claim.FactionSiteBound)
             return claim.FactionPlanetMap != null
-                ? $"{claim.FactionPlanetName} · FTL-диск {claim.FactionSiteCode} · " +
+                ? $"{claim.FactionPlanetName} — FTL-диск {claim.FactionSiteCode} — " +
                   "оберіть місце для ретранслятора після висадки"
                 : $"Ділянка {claim.FactionSiteCode}: маршрут ще не підготовлено";
 
-        var description = $"Ділянка {claim.FactionSiteCode} · {claim.FactionSiteMapLabel} · " +
+        var description = $"Ділянка {claim.FactionSiteCode} — {claim.FactionSiteMapLabel} — " +
             $"X {claim.FactionSiteX:0.0}, Y {claim.FactionSiteY:0.0} (лише цей раунд)";
         if (_organizations.TryGetValue(claim.Organization, out var siteOrg) && siteOrg != null)
         {
             var links = FactionLocalLinks(siteOrg, claim);
             description += links > 0
-                ? $" · локальна мережа: {links} вуз. у радіусі 120 м"
-                : " · поблизу немає активних вузлів вашої мережі";
+                ? $" — локальна мережа: {links} вуз. у радіусі 120 м"
+                : " — поблизу немає активних вузлів вашої мережі";
         }
 
         if (claim.FactionStage == 1)
             description += claim.FactionSurveyBeacon is { } beacon && !Deleted(beacon)
-                ? " · польовий орієнтир встановлено"
-                : " · польовий орієнтир потребує відновлення";
+                ? " — польовий орієнтир встановлено"
+                : " — польовий орієнтир потребує відновлення";
 
         if (viewer is not { } key)
             return description;
@@ -131,19 +131,19 @@ public sealed partial class OrganizationSystem
                 continue;
             var actorXform = Transform(pair.Key);
             if (actorXform.MapUid != claim.FactionSiteMapUid)
-                return description + " · ви на іншій мапі";
+                return description + " — ви на іншій мапі";
 
             var current = actorXform.MapPosition.Position;
             var dx = claim.FactionSiteX - current.X;
             var dy = claim.FactionSiteY - current.Y;
             var meters = Math.Sqrt(dx * dx + dy * dy);
             if (meters <= 2)
-                return description + " · ви на місці";
+                return description + " — ви на місці";
             // Map-space Y points north, X points east. This is a simple local
             // bearing, not a radar marker or FTL navigation coordinate.
             var directions = new[] { "Пн", "ПнСх", "Сх", "ПдСх", "Пд", "ПдЗх", "Зх", "ПнЗх" };
             var sector = ((int)Math.Round(Math.Atan2(dx, dy) * 4 / Math.PI) + 8) % 8;
-            return description + $" · від вас {meters:0} м, напрямок {directions[sector]}";
+            return description + $" — від вас {meters:0} м, напрямок {directions[sector]}";
         }
         return description;
     }

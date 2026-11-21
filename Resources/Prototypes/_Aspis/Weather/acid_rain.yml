@@ -1,0 +1,12 @@
+# Acidic rainfall after the verified planetary agricultural spraying event.
+# Uses the engine weather renderer: no per-tile entities or gas-spreading.
+- type: weather
+  id: AspisAgroAcidRain
+  sprite:
+    sprite: /Textures/_Aspis/Effects/acid_rain.rsi
+    state: rain
+  sound:
+    path: /Audio/Effects/Weather/rain_heavy.ogg
+    params:
+      loop: true
+      volume: -5

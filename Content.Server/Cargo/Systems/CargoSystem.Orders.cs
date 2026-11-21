@@ -542,11 +542,11 @@ namespace Content.Server.Cargo.Systems
         /// Nothing is dispatched until an ordinary cargo worker approves it.
         /// </summary>
         public bool TryQueueOrganizationQuotaCrates(EntityUid console, Guid organization, string code, string requester,
-            int totalUnits, int alreadyRequested, int[] postTargets, out int queued)
+            int totalUnits, int alreadyRequested, int[] postTargets, out int queued, bool frontier = false)
         {
             queued = 0;
             if (organization == Guid.Empty || code.Length is < 6 or > 48 ||
-                requester.Length is < 1 or > 100 || totalUnits is < 1 or > 40 ||
+                requester.Length is < 1 or > 100 || totalUnits is < 1 or > 80 ||
                 alreadyRequested < 0 || alreadyRequested >= totalUnits ||
                 !TryComp<CargoOrderConsoleComponent>(console, out var control) ||
                 !TryGetOrderDatabase(console, out var station, out var database, control) ||
@@ -582,7 +582,7 @@ namespace Content.Server.Cargo.Systems
                 return false;
             }
             _quotaOrders.Add(order, new QuotaOrderAuthorization(organization, code, totalUnits, alreadyRequested,
-                (int[]) postTargets.Clone()));
+                (int[]) postTargets.Clone(), frontier));
             _adminLogger.Add(LogType.Action, LogImpact.Low,
                 $"Organization quota cargo request queued: {marker}, quantity={queued}, computer={console}");
             return true;

@@ -1,0 +1,27 @@
+# First flight-test equipment. Purchases, authored bases and the custom sky
+# parallax are intentionally outside this foundation stage.
+- type: entity
+  id: AspisAgriculturalSprayer
+  parent: BaseMachinePowered
+  name: авіаційний розпилювальний модуль
+  description: Для обробки планетарних ділянок із борту шатла.
+  components:
+  - type: Transform
+    anchored: true
+  - type: Sprite
+    sprite: _Aspis/Structures/Agro/sprayer.rsi
+    layers:
+    - state: empty
+      map: ["enum.AspisAgroSprayerVisualLayers.Indicator"]
+  - type: Appearance
+  - type: GenericVisualizer
+    visuals:
+      enum.AspisAgroSprayerVisuals.Loaded:
+        enum.AspisAgroSprayerVisualLayers.Indicator:
+          True: { state: full }
+          False: { state: empty }
+  - type: AspisAgriculturalSprayer
+    tank: 0
+    tankCapacity: 1
+  - type: StaticPrice
+    price: 0

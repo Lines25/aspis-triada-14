@@ -1,0 +1,42 @@
+# Repairable counterparts for common original civilian Shipyard structures.
+# Only structural objects with a faithful parent type are substituted during
+# contract damage. Original physics, construction graphs and visuals are inherited.
+- type: entity
+  parent: WallSolid
+  id: AspisContractSolidWall
+  components:
+  - type: ShipRepairable
+    repairTime: 4
+    repairCost: 5
+
+- type: entity
+  parent: WallReinforced
+  id: AspisContractReinforcedWall
+  components:
+  - type: ShipRepairable
+    repairTime: 6
+    repairCost: 7
+
+- type: entity
+  parent: ReinforcedWindow
+  id: AspisContractReinforcedWindow
+  components:
+  - type: ShipRepairable
+    repairTime: 5
+    repairCost: 6
+
+- type: entity
+  parent: ShuttleWindow
+  id: AspisContractShuttleWindow
+  components:
+  - type: ShipRepairable
+    repairTime: 5
+    repairCost: 6
+
+- type: entity
+  parent: WallRiveted
+  id: AspisContractRivetedWall
+  components:
+  - type: ShipRepairable
+    repairTime: 5
+    repairCost: 6

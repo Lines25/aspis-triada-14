@@ -56,7 +56,7 @@ public sealed partial class BiomeSystem : SharedBiomeSystem
     private const float UpdateInterval = 1f / 10f;
 
     private float _unloadTimer = 0f;
-    private const float UnloadInterval = 10f;
+    private const float UnloadInterval = 0.5f;
 
     /// <summary>
     /// Load area for chunks containing tiles, decals etc.
@@ -171,16 +171,13 @@ public sealed partial class BiomeSystem : SharedBiomeSystem
 
             ProcessPlayerChunkRequests();
 
-            // Early exit if no players around chunk
-            if (_handledEntities.Count == 0)
-            {
-                // Triad: CleanupUpdateCycle() moved to the finally below.
-                return;
-            }
+            // Always process the unload pass, including when everyone has left
+            // the planet. Otherwise cached biome chunks stay alive indefinitely
+            // until a new player enters *some* biome map.
 
             var loadBiomes = AllEntityQuery<BiomeComponent, MapGridComponent>();
 
-            _unloadTimer += frameTime;
+            _unloadTimer += UpdateInterval;
             var shouldUnload = _unloadTimer > UnloadInterval;
 
             while (loadBiomes.MoveNext(out var gridUid, out var biome, out var grid))

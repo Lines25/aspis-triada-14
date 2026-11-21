@@ -1,0 +1,30 @@
+# Contract-bound field SRD. Its repair component is NOT present in the
+# prototype: the server grants it only while a company worker is on their
+# active construction contract hull. This also prevents an unrestricted
+# 1-second use immediately after picking the item up from the rack.
+- type: entity
+  id: AspisConstructionWorkSRD
+  parent: BaseItem
+  name: будівельний SRD
+  description: Відновлює пошкоджені секції чинного контракту вашої компанії. Працює на контрактному шатлі, заряджається лише на активній верфі.
+  components:
+  - type: OrganizationConstructionWorkTool
+  - type: Sprite
+    scale: 0.8, 0.8
+    sprite: _Mono/Objects/Tools/repair_device_item.rsi
+    state: item
+  - type: Item
+    sprite: _Mono/Objects/Tools/repair_device.rsi
+    size: Normal
+  - type: Clothing
+    quickEquip: false
+    slots:
+    - Belt
+  - type: LimitedCharges
+    maxCharges: 300
+    lastCharges: 60
+  - type: StaticPrice
+    price: 0
+    vendPrice: 0
+  # No AutoRecharge, no ShipRepairTool tag and no ShipRepairTool component.
+  # Recharge and SRD permissions are granted by the _Aspis server system only.

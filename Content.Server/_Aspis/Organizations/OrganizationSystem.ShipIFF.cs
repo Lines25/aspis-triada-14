@@ -88,6 +88,6 @@ public sealed partial class OrganizationSystem
 
         // The current IFF component is networked and drives the ordinary
         // shuttle radar and scanning-console color without custom UI hacks.
-        _organizationShuttle.SetIFFColor(grid, Color.FromHex(organization.Color));
+        _organizationShuttle.SetIFFColor(grid, GetReadableIffColor(organization.Color));
     }
 }

@@ -1,11 +1,11 @@
 meta:
   format: 7
   category: Grid
-  engineVersion: 289.0.2
+  engineVersion: 289.0.7
   forkId: ""
   forkVersion: ""
-  time: 09/23/2026 23:05:47
-  entityCount: 6332
+  time: 11/20/2026 15:18:25
+  entityCount: 6337
 maps: []
 grids:
 - 1
@@ -10223,32 +10223,8 @@ entities:
       parent: 1
       rot: 3.141592653589793 rad
       pos: 15.5,-19.5
-  - uid: 4405
-    components:
-    - type: Transform
-      parent: 1
-      rot: 3.141592653589793 rad
-      pos: -16.5,-1.5
 - proto: BenchSteelMiddle
   entities:
-  - uid: 868
-    components:
-    - type: Transform
-      parent: 1
-      rot: 3.141592653589793 rad
-      pos: -18.5,-1.5
-  - uid: 869
-    components:
-    - type: Transform
-      parent: 1
-      rot: 3.141592653589793 rad
-      pos: -17.5,-1.5
-  - uid: 870
-    components:
-    - type: Transform
-      parent: 1
-      rot: 3.141592653589793 rad
-      pos: -19.5,-1.5
   - uid: 2567
     components:
     - type: Transform
@@ -10329,12 +10305,6 @@ entities:
       parent: 1
       rot: 3.141592653589793 rad
       pos: 13.5,-19.5
-  - uid: 4397
-    components:
-    - type: Transform
-      parent: 1
-      rot: 3.141592653589793 rad
-      pos: -20.5,-1.5
 - proto: BoozeDispenserEmpty
   entities:
   - uid: 876
@@ -19139,6 +19109,28 @@ entities:
       powerLoad: 5
     - type: Battery
       startingCharge: 0
+- proto: ComputerOrganizationRegistry
+  entities:
+  - uid: 2889
+    components:
+    - type: Transform
+      parent: 1
+      rot: 3.141592653589793 rad
+      pos: -17.5,-1.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
+  - uid: 6334
+    components:
+    - type: Transform
+      parent: 1
+      rot: 3.141592653589793 rad
+      pos: -19.5,-1.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
 - proto: ComputerPowerMonitoring
   entities:
   - uid: 2595
@@ -20022,12 +20014,6 @@ entities:
     - type: Transform
       parent: 1
       pos: 3.5,28.5
-  - uid: 2712
-    components:
-    - type: Transform
-      parent: 1
-      rot: 1.5707963267948966 rad
-      pos: -15.5,0.5
   - uid: 2713
     components:
     - type: Transform
@@ -20052,6 +20038,12 @@ entities:
       parent: 1
       rot: 3.141592653589793 rad
       pos: 0.5,-25.5
+  - uid: 6337
+    components:
+    - type: Transform
+      parent: 1
+      rot: 1.5707963267948966 rad
+      pos: -16.5,0.5
 - proto: DisposalJunction
   entities:
   - uid: 2717
@@ -21084,11 +21076,6 @@ entities:
       parent: 1
       rot: -1.5707963267948966 rad
       pos: -14.5,0.5
-  - uid: 2889
-    components:
-    - type: Transform
-      parent: 1
-      pos: -15.5,-0.5
   - uid: 2890
     components:
     - type: Transform
@@ -21269,6 +21256,17 @@ entities:
       parent: 1
       rot: 3.141592653589793 rad
       pos: -3.5,-0.5
+  - uid: 2923
+    components:
+    - type: Transform
+      parent: 1
+      rot: 1.5707963267948966 rad
+      pos: -15.5,0.5
+  - uid: 6336
+    components:
+    - type: Transform
+      parent: 1
+      pos: -16.5,-0.5
 - proto: DisposalTrunk
   entities:
   - uid: 2581
@@ -21283,12 +21281,6 @@ entities:
       parent: 1
       rot: 3.141592653589793 rad
       pos: -3.5,-13.5
-  - uid: 2923
-    components:
-    - type: Transform
-      parent: 1
-      rot: 3.141592653589793 rad
-      pos: -15.5,-1.5
   - uid: 2924
     components:
     - type: Transform
@@ -21373,6 +21365,12 @@ entities:
     - type: Transform
       parent: 1
       pos: 6.5,-6.5
+  - uid: 6338
+    components:
+    - type: Transform
+      parent: 1
+      rot: 3.141592653589793 rad
+      pos: -16.5,-1.5
 - proto: DisposalUnit
   entities:
   - uid: 2580
@@ -21380,11 +21378,6 @@ entities:
     - type: Transform
       parent: 1
       pos: 6.5,-12.5
-  - uid: 2938
-    components:
-    - type: Transform
-      parent: 1
-      pos: -15.5,-1.5
   - uid: 2939
     components:
     - type: Transform
@@ -21460,6 +21453,11 @@ entities:
     - type: Transform
       parent: 1
       pos: 10.5,28.5
+  - uid: 4405
+    components:
+    - type: Transform
+      parent: 1
+      pos: -16.5,-1.5
 - proto: DisposalYJunction
   entities:
   - uid: 2954
@@ -31384,7 +31382,7 @@ entities:
     - type: Transform
       parent: 1
       pos: 66.5,10.5
-- proto: HandheldHealthAnalyzerUnpowered
+- proto: HandheldHealthAnalyzer
   entities:
   - uid: 4285
     components:
@@ -32245,6 +32243,13 @@ entities:
     - type: Transform
       parent: 1
       pos: 8.505034,23.489223
+- proto: PlushieGnome
+  entities:
+  - uid: 4397
+    components:
+    - type: Transform
+      parent: 1
+      pos: -7.5,-5.5
 - proto: PlushieIpc
   entities:
   - uid: 4389
@@ -32297,6 +32302,11 @@ entities:
     - type: Transform
       parent: 1
       pos: -15.5,2.5
+  - uid: 2938
+    components:
+    - type: Transform
+      parent: 1
+      pos: -15.5,-1.5
   - uid: 4395
     components:
     - type: Transform
@@ -32332,6 +32342,11 @@ entities:
     - type: Transform
       parent: 1
       pos: 1.5,38.5
+  - uid: 5360
+    components:
+    - type: Transform
+      parent: 1
+      pos: -21.5,-1.5
   - uid: 6331
     components:
     - type: Transform
@@ -32385,6 +32400,12 @@ entities:
     - type: Transform
       parent: 1
       pos: 45.5,3.5
+  - uid: 6335
+    components:
+    - type: Transform
+      parent: 1
+      rot: 1.5707963267948966 rad
+      pos: -18.5,-1.5
 - proto: PoweredDimSmallLight
   entities:
   - uid: 6298
@@ -34688,20 +34709,21 @@ entities:
       pos: 8.5,-6.5
 - proto: SafetyDepositConsole
   entities:
+  - uid: 869
+    components:
+    - type: Transform
+      parent: 1
+      rot: -1.5707963267948966 rad
+      pos: -20.5,-1.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
   - uid: 4402
     components:
     - type: Transform
       parent: 1
       pos: 3.5,26.5
-    - type: ApcPowerReceiver
-      powerLoad: 5
-    - type: Battery
-      startingCharge: 0
-  - uid: 5360
-    components:
-    - type: Transform
-      parent: 1
-      pos: -21.5,-1.5
     - type: ApcPowerReceiver
       powerLoad: 5
     - type: Battery
@@ -36749,7 +36771,7 @@ entities:
       pos: -8.5,-9.5
     - type: Door
       state: Opening
-      secondsUntilStateChange: -7322.9746
+      secondsUntilStateChange: -7597.4795
 - proto: SpaceHeaterAnchored
   entities:
   - uid: 5138
@@ -37976,6 +37998,14 @@ entities:
     - type: Transform
       parent: 1
       pos: 54.5,8.5
+- proto: TableReinforcedGlass
+  entities:
+  - uid: 870
+    components:
+    - type: Transform
+      parent: 1
+      rot: 1.5707963267948966 rad
+      pos: -18.5,-1.5
 - proto: TableWood
   entities:
   - uid: 5317
@@ -43554,6 +43584,12 @@ entities:
       pos: 13.5,-8.5
 - proto: WindowReinforcedDirectional
   entities:
+  - uid: 2712
+    components:
+    - type: Transform
+      parent: 1
+      rot: -1.5707963267948966 rad
+      pos: -16.5,-1.5
   - uid: 6286
     components:
     - type: Transform
@@ -43578,4 +43614,10 @@ entities:
       parent: 1
       rot: -1.5707963267948966 rad
       pos: 23.5,17.5
+  - uid: 6333
+    components:
+    - type: Transform
+      parent: 1
+      rot: 1.5707963267948966 rad
+      pos: -20.5,-1.5
 ...

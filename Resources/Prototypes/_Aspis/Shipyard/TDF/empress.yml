@@ -3,7 +3,7 @@
   parent: BaseVesselTdf
   name: TDF Empress Mothership
   description: A large patrol vessel capable of carrying up to 4 smaller faster attack ships. The flagship vessel of the TDF.
-  price: 250000
+  price: 365000
   purchasable: false # voucher only
   category: Large
   group: Security, Shipyard

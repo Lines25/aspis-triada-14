@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "license": "CC-BY-SA-3.0",
+  "copyright": "Temporary reused artwork from the user-supplied Aspis herbicide_source.rsi (CC-BY-SA-3.0).",
+  "size": {
+    "x": 32,
+    "y": 32
+  },
+  "states": [
+    {
+      "name": "empty"
+    },
+    {
+      "name": "full"
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+# Q2.2C.2: real, tool-repairable structural parts on company contract ships.
+# Parent prototypes exist in the pinned Triada build. These entities inherit
+# their actual construction, physics, visual and interaction components.
+- type: entity
+  parent: WallShuttle
+  id: AspisYardShuttleWall
+  name: контрактна зовнішня обшивка
+  components:
+  - type: ShipRepairable
+    repairTime: 6
+    repairCost: 8
+
+- type: entity
+  parent: WallShuttleInterior
+  id: AspisYardInteriorWall
+  name: контрактна внутрішня перегородка
+  components:
+  - type: ShipRepairable
+    repairTime: 4
+    repairCost: 5
+
+- type: entity
+  parent: Window
+  id: AspisYardHullWindow
+  name: контрактне оглядове скло
+  components:
+  - type: ShipRepairable
+    repairTime: 5
+    repairCost: 6

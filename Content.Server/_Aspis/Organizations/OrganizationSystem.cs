@@ -1,3 +1,5 @@
+using Content.Shared.Access.Components;
+using Content.Shared.Interaction;
 using System.Linq;
 using Content.Shared.Mobs;
 using Content.Shared.Ghost;
@@ -51,14 +53,23 @@ public sealed partial class OrganizationSystem : EntitySystem
         RegistrationFee + (isPrivate ? PrivateRegistrationSurcharge : 0) +
         (kind == OrganizationKind.Faction ? FactionRegistrationSurcharge : 0);
 
+    // Console labels sit on a dark UI, while shuttle/IFF contacts are also
+    // read against dark space backgrounds. Keep organization colors moody, but
+    // prevent them from becoming effectively invisible.
+    private const float MinOrganizationColorBrightness = 0.16f;
+    private const float MinOrganizationConsoleBrightness = 0.20f;
+    private const float MinOrganizationIffBrightness = 0.28f;
+
+    // This legacy field also stores links to an organization's published materials.
+    // HTTPS-only, public DNS hosts; previous Discord links remain valid.
     private static bool ValidDiscordLink(string link)
     {
-        if (link.Length == 0) return true;
+        if (link.Length == 0)
+            return true;
         return link.Length <= 240 && Uri.TryCreate(link, UriKind.Absolute, out var url) &&
-            url.Scheme == Uri.UriSchemeHttps && url.UserInfo.Length == 0 && url.IsDefaultPort &&
-            ((url.Host.Equals("discord.com", StringComparison.OrdinalIgnoreCase) &&
-              url.AbsolutePath.StartsWith("/channels/", StringComparison.OrdinalIgnoreCase)) ||
-             url.Host.Equals("discord.gg", StringComparison.OrdinalIgnoreCase));
+            url.Scheme == Uri.UriSchemeHttps && url.UserInfo.Length == 0 &&
+            url.IsDefaultPort && !url.IsLoopback && url.HostNameType == UriHostNameType.Dns &&
+            url.Host.Contains('.') && !url.Host.EndsWith(".local", StringComparison.OrdinalIgnoreCase);
     }
 
     // The client can submit arbitrary BUI bytes. Validate PNG signature and bounds on
@@ -202,6 +213,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         public string CustomTitle = string.Empty;
         public byte Distinction;
         public Guid CustomRoleId;
+        public DateTime JoinedAtUtc;
     }
 
     private sealed class Application(Guid id, CharacterKey key, string name, int quotedFee)
@@ -228,6 +240,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         public readonly List<OrganizationFactionFindingRecord> FactionFindings = new();
         public CharacterKey Owner = owner.Key;
         public bool IsPrivate = isPrivate;
+        public bool PrivateAccessPurchased = isPrivate;
         public bool RosterPublic = true;
         public int PayrollPerMember;
         public bool PayrollAutomatic;
@@ -236,6 +249,8 @@ public sealed partial class OrganizationSystem : EntitySystem
         public int QuotaIncomeBonusPercent;
         public int QuotaBonusCycles;
         public readonly List<OrganizationCustomRoleRecord> CustomRoles = new();
+        public readonly List<OrganizationAccessProfileRecord> AccessProfiles = new();
+        public readonly List<OrganizationAccessRoleGrantRecord> AccessRoleGrants = new();
         public int LogisticsLevel;
         public int ResearchFacilityLevel;
         public int InfrastructureLevel;
@@ -277,6 +292,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         public DateTime OutpostBlueprintUtc;
         public string FleetBlueprintName = string.Empty;
         public string FleetBlueprintHash = string.Empty;
+        public string FleetApprovedBlueprintHash = string.Empty;
         public string FleetListingName = string.Empty;
         public string FleetListingDescription = string.Empty;
         public int FleetRentalPrice = OrganizationFleetRules.DefaultRentalPrice;
@@ -343,16 +359,51 @@ public sealed partial class OrganizationSystem : EntitySystem
         _nextUpkeep = _gameTiming.CurTime + UpkeepInterval;
         _nextEconomyCycle = _gameTiming.CurTime + EconomyInterval;
         if (_organizations.Count != document.Organizations.Count)
+        {
+            Logger.Error($"Organization registry recovery diagnostics: revision={document.Revision}, " +
+                $"saved={document.Organizations.Count}, restored={_organizations.Count}. " +
+                "Raw registry files have NOT been modified. Back up BOTH registry-a.json and registry-b.json.");
             _store.Disable("One or more organization records failed validation");
+        }
 
         SubscribeLocalEvent<Content.Shared.Cargo.Components.CargoOrderConsoleComponent,
             Content.Shared.Interaction.InteractUsingEvent>(OnInsertQuotaChip);
+
+        // If a newer registry is malformed, attempt the older JSON copy in read-only
+        // mode to restore visibility without rewriting player economies / ownership.
+        if (_organizations.Count == 0 && document.Organizations.Count > 0 &&
+            _store.LoadEarlierThan(document.Revision) is { } previous)
+        {
+            Logger.Error($"Organization registry fallback: newer revision {document.Revision} " +
+                $"loaded zero companies. Trying previous revision {previous.Revision} read-only.");
+            _store.Disable("Recovery from previous organization snapshot: manual review required");
+            Restore(previous);
+            Logger.Error($"Organization registry fallback: recovered {_organizations.Count} of " +
+                $"{previous.Organizations.Count} saved organizations. Both JSON files unchanged.");
+        }
+
         SubscribeLocalEvent<Content.Server.Cargo.Systems.EntitySoldEvent>(OnQuotaCratesSold);
         SubscribeLocalEvent<Content.Server.Shuttles.Events.FTLStartedEvent>(OnFactionWreckFTLStarted);
         SubscribeLocalEvent<Content.Server.Shuttles.Events.FTLCompletedEvent>(OnFactionWreckFTLCompleted);
         SubscribeLocalEvent<OrganizationQuotaCrateComponent, ComponentShutdown>(OnQuotaCrateRemoved);
+        // Q2: player must use a contract-bound physical scanner on real crates.
+        SubscribeLocalEvent<OrganizationQuotaInspectionScannerComponent,
+            Content.Shared.Interaction.AfterInteractEvent>(OnQuotaInspectionScannerUsed);
+        // Q2.3: the navigation key must be an actual usable physical item.
+        // Q2.3J: the visible two-second interaction finishes via DoAfter.
+        SubscribeLocalEvent<OrganizationFrontierNavigatorComponent,
+            Content.Shared.Interaction.AfterInteractEvent>(OnFrontierNavigatorUsed);
+        SubscribeLocalEvent<OrganizationFrontierNavigatorComponent,
+            OrganizationFrontierBindingDoAfterEvent>(OnFrontierBindingComplete);
+        SubscribeLocalEvent<OrganizationFrontierReceivingComponent, BoundUIOpenedEvent>(OnFrontierReceiverOpened);
+        SubscribeLocalEvent<OrganizationFrontierReceivingComponent, OrganizationFrontierSelectPostMessage>(OnFrontierReceiverSelected);
+        SubscribeLocalEvent<Content.Shared.Damage.DamageableComponent,
+            Content.Shared.Damage.DamageChangedEvent>(OnFrontierCombatDamage);
+        SubscribeLocalEvent<Content.Server.Shuttles.Events.ConsoleFTLAttemptEvent>(OnFrontierFTLAttempt);
         SubscribeLocalEvent<Content.Server.Storage.Components.EntityStorageComponent,
             Content.Shared.Interaction.InteractUsingEvent>(OnAttachQuotaExportInvoice);
+        SubscribeLocalEvent<OrganizationConsoleComponent, ComponentInit>(OnLeaseConsoleInitialized);
+        SubscribeLocalEvent<OrganizationConsoleComponent, ComponentShutdown>(OnLeaseConsoleShutdown);
         SubscribeLocalEvent<OrganizationConsoleComponent, BoundUIOpenedEvent>(OnOpened);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationCreateMessage>(OnCreate);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationStageOutpostBlueprintMessage>(OnStageOutpostBlueprint);
@@ -360,6 +411,8 @@ public sealed partial class OrganizationSystem : EntitySystem
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationBlueprintUploadChunkMessage>(OnBlueprintUploadChunk);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationRentFleetShuttleMessage>(OnRentFleetShuttle);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationConfigureFleetListingMessage>(OnConfigureFleetListing);
+        SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationClearFleetListingMessage>(OnClearFleetListing);
+        SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationUpdateDescriptionMessage>(OnUpdateDescription);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationReturnFleetShuttleMessage>(OnReturnFleetShuttle);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationPurchaseOutpostMessage>(OnPurchaseOutpost);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationScheduleOutpostReplacementMessage>(OnScheduleOutpostReplacement);
@@ -368,6 +421,20 @@ public sealed partial class OrganizationSystem : EntitySystem
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationPrintOutpostToolMessage>(OnPrintOutpostTool);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationConfigureOutpostListingMessage>(OnConfigureOutpostListing);
         SubscribeLocalEvent<OrganizationOutpostDoorComponent, OrganizationOutpostAccessCheckEvent>(OnOrganizationReaderCheck);
+        SubscribeLocalEvent<OrganizationPropertyAccessReaderComponent, Content.Shared.Doors.BeforeDoorOpenedEvent>(OnCorporateDoorAccess);
+        SubscribeLocalEvent<OrganizationOutpostDoorComponent, Content.Shared.Doors.BeforeDoorOpenedEvent>(OnLegacyOutpostDoorAccess);
+        SubscribeLocalEvent<OrganizationOutpostConfiguratorComponent, ComponentInit>(OnAdvancedConfiguratorInit);
+        SubscribeLocalEvent<OrganizationOutpostConfiguratorComponent, ComponentRemove>(OnAdvancedConfiguratorRemoved);
+        SubscribeLocalEvent<OrganizationOutpostConfiguratorComponent, Content.Shared.Interaction.AfterInteractEvent>(OnOutpostConfiguratorUse);
+        SubscribeLocalEvent<OrganizationOutpostConfiguratorComponent, Robust.Shared.Containers.EntInsertedIntoContainerMessage>(RefreshAdvancedConfiguratorUi);
+        SubscribeLocalEvent<OrganizationOutpostConfiguratorComponent, Robust.Shared.Containers.EntRemovedFromContainerMessage>(RefreshAdvancedConfiguratorUi);
+        Subs.BuiEvents<OrganizationOutpostConfiguratorComponent>(OrganizationOutpostConfiguratorUiKey.Key, subs =>
+        {
+            subs.Event<BoundUIOpenedEvent>(RefreshAdvancedConfiguratorUi);
+            subs.Event<OrganizationOutpostConfiguratorSelectSlotMessage>(OnAdvancedConfiguratorSelect);
+        });
+        SubscribeLocalEvent<OrganizationPropertyAccessReaderComponent, OrganizationPropertyAccessCheckEvent>(OnOrganizationPropertyReaderCheck);
+        SubscribeLocalEvent<AccessReaderComponent, InteractUsingEvent>(OnOrganizationPropertyReaderConfigured);
         SubscribeLocalEvent<OrganizationOutpostConfiguratorComponent,
             Content.Shared.Interaction.InteractHandEvent>(OnOutpostConfiguratorCycle);
         SubscribeLocalEvent<OrganizationOutpostSpawnBeaconComponent,
@@ -395,6 +462,11 @@ public sealed partial class OrganizationSystem : EntitySystem
         SubscribeLocalEvent<Content.Server.Advertise.Components.AdvertiseComponent, Content.Server.Advertise.EntitySystems.AttemptAdvertiseEvent>(OnAttemptAdvertisement);
         SubscribeLocalEvent<OrganizationOwnerBindingComponent, MobStateChangedEvent>(OnOwnerMobState);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationSetPermissionsMessage>(OnSetPermissions);
+        SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationPurchaseAccessSlotMessage>(OnPurchaseAccessSlot);
+        SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationRenameAccessSlotMessage>(OnRenameAccessSlot);
+        SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationSetRoleAccessMaskMessage>(OnSetRoleAccessMask);
+        SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationSetAccessSlotRolesMessage>(OnSetAccessSlotRoles);
+        SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationPrintAccessCardMessage>(OnPrintAccessCard);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationSetDistinctionMessage>(OnSetDistinction);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationStockMessage>(OnStockOrder);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationTdfFundMessage>(OnTdfFund);
@@ -483,10 +555,87 @@ public sealed partial class OrganizationSystem : EntitySystem
         return null;
     }
 
+    // Old registries may contain RGB without '#', CSS short hex, or RGBA hex.
+    // Normalize ONLY persisted values on load. New player-submitted values must
+    // continue through the strict TryNormalizeColor validator unchanged.
+    // The in-game color is RGB (opaque), so a legacy alpha channel is dropped.
+    private static bool TryNormalizeStoredColor(string? value, out string color)
+    {
+        if (TryNormalizeColor(value, out color))
+            return true;
+
+        color = string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+            return false;
+
+        var hex = value.Trim().ToUpperInvariant();
+        if (hex.StartsWith('#'))
+            hex = hex[1..];
+        else if (hex.StartsWith("0X", StringComparison.Ordinal))
+            hex = hex[2..];
+
+        if (!hex.All(Uri.IsHexDigit))
+            return false;
+
+        // CSS RRGGBBAA: preserve RGB; existing company colors have no alpha.
+        if (hex.Length == 8)
+            hex = hex[..6];
+        else if (hex.Length == 4)
+            hex = hex[..3]; // CSS RGBA shorthand.
+
+        if (hex.Length == 3)
+            hex = string.Concat(hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]);
+
+        return hex.Length == 6 && TryNormalizeColor("#" + hex, out color);
+    }
+
     private static bool TryNormalizeColor(string? value, out string color)
     {
         color = value?.Trim().ToUpperInvariant() ?? string.Empty;
         return color.Length == 7 && color[0] == '#' && color.Skip(1).All(Uri.IsHexDigit);
+    }
+
+    private static float PerceivedBrightness(Color color) =>
+        0.299f * color.R + 0.587f * color.G + 0.114f * color.B;
+
+    private static Color RaiseBrightness(Color color, float minimumBrightness)
+    {
+        var current = PerceivedBrightness(color);
+        if (current >= minimumBrightness)
+            return color;
+
+        var denom = 1f - current;
+        var mix = denom <= 0.0001f ? 1f : Math.Clamp((minimumBrightness - current) / denom, 0f, 1f);
+        return new Color(
+            color.R + (1f - color.R) * mix,
+            color.G + (1f - color.G) * mix,
+            color.B + (1f - color.B) * mix,
+            color.A);
+    }
+
+    private static bool TryNormalizeReadableColor(string? value, out string color)
+    {
+        color = string.Empty;
+        if (!TryNormalizeColor(value, out var normalized))
+            return false;
+        if (PerceivedBrightness(Color.FromHex(normalized)) < MinOrganizationColorBrightness)
+            return false;
+        color = normalized;
+        return true;
+    }
+
+    private static string GetReadableConsoleColor(string value)
+    {
+        if (!TryNormalizeColor(value, out var normalized))
+            return "#A4B4C4";
+        return RaiseBrightness(Color.FromHex(normalized), MinOrganizationConsoleBrightness).ToHex();
+    }
+
+    private static Color GetReadableIffColor(string value)
+    {
+        if (!TryNormalizeColor(value, out var normalized))
+            return Color.FromHex("#A4B4C4");
+        return RaiseBrightness(Color.FromHex(normalized), MinOrganizationIffBrightness);
     }
 
     private static bool TryNormalizeName(string? value, out string name)
@@ -527,6 +676,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         base.Update(frameTime);
         var now = _gameTiming.CurTime;
         UpdateFactionLocators();
+        TickFrontierRoutes();
         if (now >= _nextQuotaSweep)
         {
             _nextQuotaSweep = now + TimeSpan.FromSeconds(30);
@@ -575,6 +725,7 @@ public sealed partial class OrganizationSystem : EntitySystem
                     TrackTdfDuty(actor, key);
                 if (onDuty != markedTdf)
                     UpdateAffiliation(actor, key);
+                SynchronizeOrdinaryCompanyId(actor, key);
             }
         }
         if (now < _nextEconomyCycle && now < _nextUpkeep)
@@ -1168,6 +1319,7 @@ public sealed partial class OrganizationSystem : EntitySystem
                     SiteName = f.SiteName, RecordedUtc = f.RecordedUtc
                 }).ToList(),
                 IsPrivate = org.IsPrivate,
+                PrivateAccessPurchased = org.PrivateAccessPurchased,
                 RosterPublic = org.RosterPublic,
                 PayrollPerMember = org.PayrollPerMember,
                 PayrollAutomatic = org.PayrollAutomatic,
@@ -1177,6 +1329,10 @@ public sealed partial class OrganizationSystem : EntitySystem
                 QuotaBonusCycles = org.QuotaBonusCycles,
                 CustomRoles = org.CustomRoles.Select(c => new OrganizationCustomRoleRecord
                 { Id = c.Id, Title = c.Title, Permissions = c.Permissions }).ToList(),
+                AccessProfiles = org.AccessProfiles.Select(a => new OrganizationAccessProfileRecord
+                { Slot = a.Slot, Title = a.Title }).ToList(),
+                AccessRoleGrants = org.AccessRoleGrants.Select(a => new OrganizationAccessRoleGrantRecord
+                { RoleKey = a.RoleKey, AccessMask = a.AccessMask }).ToList(),
                 LogisticsLevel = org.LogisticsLevel,
                 ResearchFacilityLevel = org.ResearchFacilityLevel,
                 InfrastructureLevel = org.InfrastructureLevel,
@@ -1195,7 +1351,7 @@ public sealed partial class OrganizationSystem : EntitySystem
                     PendingTransferId = p.PendingTransferId, Paid = p.Paid
                 }).ToList(),
                 EntryFee = org.EntryFee,
-                Color = org.Color,
+                Color = GetReadableConsoleColor(org.Color),
                 Description = org.Description,
                 DiscordLink = org.DiscordLink,
                 Banner = (byte[])org.Banner.Clone(),
@@ -1222,6 +1378,7 @@ public sealed partial class OrganizationSystem : EntitySystem
                 OutpostBlueprintUtc = org.OutpostBlueprintUtc,
                 FleetBlueprintName = org.FleetBlueprintName,
                 FleetBlueprintHash = org.FleetBlueprintHash,
+                FleetApprovedBlueprintHash = org.FleetApprovedBlueprintHash,
                 FleetListingName = org.FleetListingName,
                 FleetListingDescription = org.FleetListingDescription,
                 FleetRentalPrice = org.FleetRentalPrice,
@@ -1287,7 +1444,8 @@ public sealed partial class OrganizationSystem : EntitySystem
                 {
                     Id = member.Id, UserId = member.Key.UserId, Slot = member.Key.Slot,
                     CharacterName = member.Name, Role = member.Role, CustomTitle = member.CustomTitle,
-                    Distinction = member.Distinction, CustomRoleId = member.CustomRoleId
+                    Distinction = member.Distinction, CustomRoleId = member.CustomRoleId,
+                    JoinedAtUtc = member.JoinedAtUtc
                 });
             foreach (var application in org.Applications.Values.OrderBy(a => a.Id))
                 record.Applications.Add(new OrganizationApplicationRecord
@@ -1358,7 +1516,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         {
             if (data.Id == Guid.Empty || _organizations.ContainsKey(data.Id) ||
                 !TryNormalizeName(data.Name, out var title) || title != data.Name ||
-                !TryNormalizeColor(data.Color, out var color) ||
+                !TryNormalizeStoredColor(data.Color, out var color) ||
                 !ValidKind(data.Kind, data.Industry) ||
                 data.SectorInfluenceBp is < 0 or > MarketCapacityBp ||
                 data.IndustryInfluenceBp is < 0 or > MarketCapacityBp ||
@@ -1374,6 +1532,10 @@ public sealed partial class OrganizationSystem : EntitySystem
                 data.CustomRoles.Any(c => c is null || c.Id == Guid.Empty ||
                     !ValidTitle(c.Title) || !ValidPermissions(c.Permissions)) ||
                 data.CustomRoles.Select(c => c.Id).Distinct().Count() != data.CustomRoles.Count ||
+                (data.AccessProfiles?.Count ?? 0) > 5 ||
+                (data.AccessProfiles?.Any(a => a is null || a.Slot is < 1 or > 5 || !ValidTitle(a.Title)) ?? false) ||
+                (data.AccessProfiles?.Select(a => a.Slot).Distinct().Count() ?? 0) != (data.AccessProfiles?.Count ?? 0) ||
+                (data.AccessRoleGrants?.Any(g => g is null || string.IsNullOrWhiteSpace(g.RoleKey) || g.RoleKey.Length > 80 || g.AccessMask is < 0 or > 31) ?? false) ||
                 data.LogisticsLevel is < 0 or > 5 || data.ResearchFacilityLevel is < 0 or > 5 ||
                 data.InfrastructureLevel is < 0 or > 5 ||
                 data.ServiceNetworkLevel is < 0 or > 5 || data.RiskManagementLevel is < 0 or > 5 ||
@@ -1406,7 +1568,11 @@ public sealed partial class OrganizationSystem : EntitySystem
                 (data.CrisisActive && data.Kind != OrganizationKind.Company) ||
                 data.Members is not { Count: >= 1 and <= MaxMembers } ||
                 data.Applications is not { Count: <= MaxApplications } || names.Contains(title))
+            {
+                Logger.Error($"Organization restore rejected at primary validation: " +
+                    $"id={data.Id}, name='{data.Name}', reason={ExplainOrganizationRestoreRejection(data, names)}");
                 continue;
+            }
 
             var members = new List<Member>();
             var memberIds = new HashSet<Guid>();
@@ -1420,27 +1586,48 @@ public sealed partial class OrganizationSystem : EntitySystem
                     record.CharacterName, record.Role, record.Id)
                 {
                     CustomTitle = ValidTitle(record.CustomTitle) ? record.CustomTitle : string.Empty,
-                    Distinction = record.Distinction, CustomRoleId = record.CustomRoleId
+                    Distinction = record.Distinction, CustomRoleId = record.CustomRoleId,
+                    JoinedAtUtc = record.JoinedAtUtc <= DateTime.UtcNow ? record.JoinedAtUtc : DateTime.UtcNow
                 });
             }
             if (members.Count != data.Members.Count ||
                 members.Select(m => m.Key).Distinct().Count() != members.Count ||
                 members.Any(m => occupied.Contains(m.Key)))
+            {
+                Logger.Error($"Organization restore rejected at member validation: id={data.Id}, " +
+                    $"name='{data.Name}', acceptedMembers={members.Count}, savedMembers={data.Members.Count}, " +
+                    $"duplicateMembers={members.Select(m => m.Key).Distinct().Count() != members.Count}, " +
+                    $"crossCompanyConflict={members.Any(m => occupied.Contains(m.Key))}");
                 continue;
+            }
 
             var owner = members.FirstOrDefault(m => m.Id == data.OwnerMemberId);
             if (owner == null || owner.Role != OrganizationMemberRole.Owner ||
                 members.Count(m => m.Role == OrganizationMemberRole.Owner) != 1)
+            {
+                Logger.Error($"Organization restore rejected at ownership validation: id={data.Id}, " +
+                    $"name='{data.Name}', ownerMemberPresent={owner != null}, " +
+                    $"ownerRoleValid={owner?.Role == OrganizationMemberRole.Owner}, " +
+                    $"ownerRoleCount={members.Count(m => m.Role == OrganizationMemberRole.Owner)}");
                 continue;
+            }
 
             if (data.Description is null || data.Description.Length > 500 ||
                 data.DiscordLink is null || !ValidDiscordLink(data.DiscordLink) ||
                 !ValidBanner(data.Banner))
+            {
+                Logger.Error($"Organization restore rejected at presentation validation: id={data.Id}, " +
+                    $"name='{data.Name}', descriptionInvalid={data.Description is null || data.Description.Length > 500}, " +
+                    $"discordInvalid={data.DiscordLink is null || !ValidDiscordLink(data.DiscordLink)}, " +
+                    $"bannerInvalid={!ValidBanner(data.Banner)}");
                 continue;
+            }
             var org = new Organization(data.Id, title, data.Kind, data.Industry, owner,
                 data.IsPrivate, data.EntryFee, color)
             {
                 RosterPublic = data.RosterPublic,
+                // A private organization created before this version already paid at registration.
+                PrivateAccessPurchased = data.PrivateAccessPurchased || data.IsPrivate,
                 FactionFocus = data.Kind == OrganizationKind.Faction && Enum.IsDefined(data.FactionFocus)
                     ? data.FactionFocus : OrganizationFactionFocus.None,
                 FactionFoci = data.Kind == OrganizationKind.Faction
@@ -1496,6 +1683,9 @@ public sealed partial class OrganizationSystem : EntitySystem
                     ? data.FleetBlueprintName : string.Empty,
                 FleetBlueprintHash = IsValidOutpostHash(data.FleetBlueprintHash)
                     ? data.FleetBlueprintHash : string.Empty,
+                FleetApprovedBlueprintHash = IsValidOutpostHash(data.FleetApprovedBlueprintHash) &&
+                    string.Equals(data.FleetApprovedBlueprintHash, data.FleetBlueprintHash, StringComparison.Ordinal)
+                    ? data.FleetApprovedBlueprintHash : string.Empty,
                 FleetListingName = data.FleetListingName is { Length: > 0 and <= 48 }
                     ? data.FleetListingName : string.Empty,
                 FleetListingDescription = data.FleetListingDescription is { Length: <= 160 }
@@ -1586,6 +1776,32 @@ public sealed partial class OrganizationSystem : EntitySystem
             }
             org.CustomRoles.AddRange(data.CustomRoles.Select(c => new OrganizationCustomRoleRecord
             { Id = c.Id, Title = c.Title, Permissions = c.Permissions }));
+            if (data.AccessProfiles != null)
+            {
+                foreach (var access in data.AccessProfiles.OrderBy(a => a.Slot).Take(5))
+                {
+                    if (access is null || access.Slot is < 1 or > 5 || !ValidTitle(access.Title))
+                        continue;
+                    org.AccessProfiles.Add(new OrganizationAccessProfileRecord
+                    {
+                        Slot = access.Slot,
+                        Title = access.Title
+                    });
+                }
+            }
+            if (data.AccessRoleGrants != null)
+            {
+                foreach (var grant in data.AccessRoleGrants.Take(24))
+                {
+                    if (grant is null || string.IsNullOrWhiteSpace(grant.RoleKey))
+                        continue;
+                    org.AccessRoleGrants.Add(new OrganizationAccessRoleGrantRecord
+                    {
+                        RoleKey = grant.RoleKey,
+                        AccessMask = Math.Clamp(grant.AccessMask, 0, 31)
+                    });
+                }
+            }
             foreach (var member in members)
                 if (member.Role == OrganizationMemberRole.Owner || member.Id == org.DeputyMemberId ||
                     org.CustomRoles.All(c => c.Id != member.CustomRoleId))
@@ -1702,6 +1918,50 @@ public sealed partial class OrganizationSystem : EntitySystem
         }
     }
 
+    // Diagnostics only. The original, strict validation above remains in force;
+    // missing or inconsistent records are NEVER silently replaced or saved.
+    private static string ExplainOrganizationRestoreRejection(OrganizationRecord data, HashSet<string> names)
+    {
+        if (data.Id == Guid.Empty) return "empty organization GUID";
+        if (!TryNormalizeName(data.Name, out var normalized) || normalized != data.Name)
+            return "name format/normalization";
+        if (names.Contains(normalized)) return "duplicate organization name";
+        if (!TryNormalizeColor(data.Color, out _)) return "color format";
+        if (!ValidKind(data.Kind, data.Industry)) return "kind/industry incompatible with current build";
+        if (data.Members is not { Count: >= 1 and <= MaxMembers }) return "member list empty/out of limits";
+        if (data.Applications is not { Count: <= MaxApplications }) return "application list missing/out of limits";
+        if (!ValidShares(data.BudgetShares)) return "company budget allocation invalid";
+        if (data.Treasury is < 0 or > MaxTreasury ||
+            data.EntryFee is < 0 or > MaxEntryFee || data.InitialInvestment is < 0 or > MaxInitialInvestment)
+            return "treasury / entry fee / initial investment outside limits";
+        if (data.SectorInfluenceBp is < 0 or > MarketCapacityBp ||
+            data.IndustryInfluenceBp is < 0 or > MarketCapacityBp ||
+            (data.Kind == OrganizationKind.Faction && data.IndustryInfluenceBp != 0))
+            return "market sector/industry influence outside limits";
+        if (data.PayrollLastCycle < 0 || data.PayrollLastCycle > data.CompletedEconomyCycles)
+            return "payroll cycle later than completed economy cycle";
+        if (data.PayrollPerMember is < 0 or > MaxPayrollPerMember || data.PayrollProfitPercent is < 0 or > 60)
+            return "payroll policy outside limits";
+        if (data.CustomRoles is null || data.CustomRoles.Count > 12 ||
+            data.CustomRoles.Any(c => c is null || c.Id == Guid.Empty ||
+                !ValidTitle(c.Title) || !ValidPermissions(c.Permissions)))
+            return "invalid custom roles";
+        if (data.PayrollAccounts is null || data.PayrollAccounts.Count > MaxPayrollAccounts ||
+            data.PayrollAccounts.Any(p => p is null || !Guid.TryParse(p.UserId, out _) ||
+                p.Slot is < 0 or >= 256 || p.Name is null || p.Name.Length > 128 ||
+                p.Available is < 0 or > MaxTreasury || p.Pending is < 0 or > MaxPayrollClaim ||
+                p.Paid < 0 || (p.Pending == 0) != (p.PendingTransferId == Guid.Empty)))
+            return "invalid payroll account or transfer ledger";
+        if (!Enum.IsDefined(data.OperatingPolicy) || !Enum.IsDefined(data.InsolvencyState))
+            return "operating / insolvency enum not recognized by current build";
+        if (!ValidPermissions(data.DeputyPermissions) || !ValidPermissions(data.OfficerPermissions) ||
+            !ValidPermissions(data.MemberPermissions))
+            return "role permissions incompatible with current build";
+        if (data.CrisisActive && data.Kind != OrganizationKind.Company)
+            return "faction marked as company in crisis";
+        return "other numeric bounds or duplicate nested records; original file retained for inspection";
+    }
+
     private static bool ValidIdentity(string? userId, int slot, string? name) =>
         Guid.TryParse(userId, out _) && slot is >= 0 and < 256 &&
         !string.IsNullOrWhiteSpace(name) && name.Length <= 128;
@@ -1766,7 +2026,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             return;
         }
 
-        if (!TryNormalizeColor(args.Color, out var color) ||
+        if (!TryNormalizeReadableColor(args.Color, out var color) ||
             !ValidKind(args.Kind, args.Industry) || args.EntryFee is < 0 or > MaxEntryFee ||
             args.Investment is < 0 or > MaxInitialInvestment ||
             !ValidShares([args.Marketing, args.Logistics, args.Security, args.Development]) ||
@@ -1776,7 +2036,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             (args.Kind == OrganizationKind.Faction && !ValidFactionFoci(args.FactionFoci)) ||
             (args.Kind == OrganizationKind.Company && args.FactionFoci is not { Length: 0 }))
         {
-            Refresh(uid, actor, "Перевірте тип, галузь, колір, внесок, логотип і розподіл бюджету.");
+            Refresh(uid, actor, "Перевірте тип, галузь, колір (не надто темний), внесок, логотип і розподіл бюджету.");
             return;
         }
 
@@ -1884,7 +2144,10 @@ public sealed partial class OrganizationSystem : EntitySystem
         if (fee > 0 && !_bank.TryBankWithdraw(actor, fee))
             return false;
 
-        var member = new Member(key, name, OrganizationMemberRole.Member, Guid.NewGuid());
+        var member = new Member(key, name, OrganizationMemberRole.Member, Guid.NewGuid())
+        {
+            JoinedAtUtc = DateTime.UtcNow
+        };
         var accepted = Commit(() =>
         {
             org.Members.Add(key, member);
@@ -1900,6 +2163,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         }
 
         UpdateAffiliation(actor, key);
+        SynchronizeOrdinaryCompanyId(actor, key);
         _adminLog.Add(LogType.Action, LogImpact.Low,
             $"{ToPrettyString(actor):player} joined {org.Name} ({org.Id}), fee={fee}");
         return true;
@@ -1945,9 +2209,9 @@ public sealed partial class OrganizationSystem : EntitySystem
                 out var actor, out var org))
             return;
 
-        if (args.EntryFee is < 0 or > MaxEntryFee || !TryNormalizeColor(args.Color, out var color))
+        if (args.EntryFee is < 0 or > MaxEntryFee || !TryNormalizeReadableColor(args.Color, out var color))
         {
-            Refresh(uid, actor, "Некоректний внесок або колір. Використовуйте формат #RRGGBB.");
+            Refresh(uid, actor, "Некоректний внесок або колір. Використовуйте формат #RRGGBB і не обирайте надто темний відтінок.");
             return;
         }
         var newName = org.Name;
@@ -1966,23 +2230,54 @@ public sealed partial class OrganizationSystem : EntitySystem
             Refresh(uid, actor, "Емблема має бути PNG, не більш ніж 16 КБ.");
             return;
         }
+        if (args.UpdateMaterialsLink &&
+            (args.MaterialsLink == null || !ValidDiscordLink(args.MaterialsLink.Trim())))
+        {
+            Refresh(uid, actor, "Матеріали: потрібне коректне HTTPS-посилання до 240 символів.");
+            return;
+        }
+        // Registration charged this exact surcharge. A later upgrade must
+        // charge it too, only once, and never be enabled by forging a UI message.
+        var privateUpgrade = args.IsPrivate && !org.PrivateAccessPurchased;
+        if (privateUpgrade)
+        {
+            if (!TryGetCharacter(actor, out var ownerKey, out _) || org.Owner != ownerKey)
+            {
+                Refresh(uid, actor, "Приватний вступ може придбати лише власник.");
+                return;
+            }
+            if (!_bank.TryBankWithdraw(actor, PrivateRegistrationSurcharge))
+            {
+                Refresh(uid, actor, $"Для приватного вступу потрібно {PrivateRegistrationSurcharge:N0} $ на особистому рахунку.");
+                return;
+            }
+        }
         if (!Commit(() =>
         {
             org.Name = newName;
             org.EntryFee = args.EntryFee;
             org.IsPrivate = args.IsPrivate;
+            if (privateUpgrade)
+                org.PrivateAccessPurchased = true;
             org.RosterPublic = args.RosterPublic;
             org.Color = color;
+            if (args.UpdateMaterialsLink)
+                org.DiscordLink = args.MaterialsLink.Trim();
             if (args.UpdateBanner)
                 org.Banner = (byte[])args.Banner.Clone();
         }))
         {
-            Refresh(uid, actor, "Не вдалося зберегти параметри організації.");
+            if (privateUpgrade && !_bank.TryBankDeposit(actor, PrivateRegistrationSurcharge))
+                _adminLog.Add(LogType.Action, LogImpact.High,
+                    $"URGENT: privacy upgrade refund requires manual reconciliation: org={org.Id}, actor={ToPrettyString(actor):player}");
+            Refresh(uid, actor, "Не вдалося зберегти параметри організації. Платіж повернено, якщо банк доступний.");
             return;
         }
         foreach (var member in org.Members.Keys)
             SyncActive(member);
-        Refresh(uid, actor, "Параметри організації оновлено.");
+        Refresh(uid, actor, privateUpgrade
+            ? $"Приватний вступ придбано за {PrivateRegistrationSurcharge:N0} $. Параметри оновлено."
+            : "Параметри організації оновлено.");
     }
 
     private static bool ValidPermissions(OrganizationPermission permissions) =>
@@ -2143,6 +2438,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         _adminLog.Add(LogType.Action, LogImpact.Low,
             $"Organization departure: actor={ToPrettyString(actor):player}, organization={org.Id}, fee={exitFee}");
         UpdateAffiliation(actor, key);
+        SynchronizeOrdinaryCompanyId(actor, key);
         Refresh(uid, actor, "Контракт розірвано. Повторний вступ можливий через 15 хвилин.");
     }
 
@@ -2711,7 +3007,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         if (org == null)
             return false;
         name = org.Name;
-        color = Color.FromHex(org.Color);
+        color = Color.FromHex(GetReadableConsoleColor(org.Color));
         role = org.Members[key].Role;
         if (role == OrganizationMemberRole.Owner)
             members = org.Members.Values.OrderBy(m => m.Role).ThenBy(m => m.Name)
@@ -2854,6 +3150,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         ClearRoundOutpostReferences();
         ClearRoundFleetReferences();
         ResetFactionOperationsForRound();
+        ResetFrontierRoutesForRound();
         _factionWreckMapsCreatedThisRound = 0;
         _factionPlanetMapsCreatedThisRound = 0;
         _sectorQuotaClaims.Clear();
@@ -3320,6 +3617,8 @@ public sealed partial class OrganizationSystem : EntitySystem
         var managerPermissions = caller != null && membership != null
             ? EffectivePermissions(membership, caller) : OrganizationPermission.None;
         var canOperate = IsOriginalController(actor);
+        if (canOperate && membership is { Kind: OrganizationKind.Company, Industry: OrganizationIndustry.Agriculture })
+            PrepareAspisAgriculturalOffers();
         var organizations = _organizations.Values.OrderBy(o => o.Name, StringComparer.OrdinalIgnoreCase)
             .Select(o => new OrganizationEntry(o.Id, o.Name,
                 o.RosterPublic || (canOperate && o.Members.ContainsKey(key)) ? o.Members[o.Owner].Name : "Приховано",
@@ -3381,7 +3680,8 @@ public sealed partial class OrganizationSystem : EntitySystem
             DailyCompanyLimit = DailyCompanyRevenueLimit,
             OutpostDeploymentError = membership != null && _outpostDeploymentErrors.TryGetValue(membership.Id, out var deploymentError)
                 ? deploymentError : string.Empty,
-            SectorQuotas = membership == null || !canOperate || onTdfDuty ? [] : BuildSectorQuotaBoard(membership, key),
+            SectorQuotas = membership == null || !canOperate || onTdfDuty ? [] :
+                DecorateAspisAgriculturalQuotas(BuildSectorQuotaBoard(membership, key)),
             FactionAuthorityPoints = membership?.FactionAuthorityPoints ?? 0,
             FactionNetworkSharePercent = membership is { Kind: OrganizationKind.Faction } shareOrg
                 ? FactionNetworkSharePercent(shareOrg) : 0f,
@@ -3411,8 +3711,10 @@ public sealed partial class OrganizationSystem : EntitySystem
             QuotaIncomeBonusPercent = membership?.QuotaIncomeBonusPercent ?? 0,
             QuotaBonusCycles = membership?.QuotaBonusCycles ?? 0,
             FleetBlueprintName = membership?.FleetBlueprintName ?? string.Empty,
-            FleetListingName = membership != null && !string.IsNullOrWhiteSpace(membership.FleetListingName)
-                ? membership.FleetListingName : membership?.FleetBlueprintName ?? string.Empty,
+            FleetBlueprintHash = membership?.FleetBlueprintHash ?? string.Empty,
+            FleetListingApproved = membership != null && IsFleetListingApproved(membership) &&
+                IsFleetBlueprintReady(membership),
+            FleetListingName = membership?.FleetListingName ?? string.Empty,
             FleetListingDescription = membership?.FleetListingDescription ?? string.Empty,
             FleetRentalPrice = membership?.FleetRentalPrice ?? OrganizationFleetRules.DefaultRentalPrice,
             FleetRenterName = membership != null && _fleetRenterNames.TryGetValue(membership.Id, out var renterName)
@@ -3481,7 +3783,7 @@ public sealed partial class OrganizationSystem : EntitySystem
                 .ToArray(),
             Stocks = _organizations.Values.Where(org => org.Kind == OrganizationKind.Company)
                 .OrderBy(org => org.Name)
-                .Select(org => new OrganizationStockEntry(org.Id, org.Name, org.Color, org.Quote,
+                .Select(org => new OrganizationStockEntry(org.Id, org.Name, GetReadableConsoleColor(org.Color), org.Quote,
                     org.SharesIssued, org.SharesListed ? org.TreasuryShares : 0,
                     org.Shareholders.Where(h => h.UserId == key.UserId && h.Slot == key.Slot).Sum(h => h.Shares),
                     (org.SectorInfluenceBp + org.IndustryInfluenceBp) / 100f,
@@ -3504,6 +3806,10 @@ public sealed partial class OrganizationSystem : EntitySystem
             PayrollAutomatic = membership?.PayrollAutomatic ?? false,
             PayrollProfitPercent = membership?.PayrollProfitPercent ?? 30,
             CustomRoles = membership?.CustomRoles.Select(c => new OrganizationCustomRoleEntry(c.Id, c.Title, c.Permissions)).ToArray() ?? [],
+            AccessProfiles = membership?.AccessProfiles.OrderBy(a => a.Slot)
+                .Select(a => new OrganizationAccessProfileEntry(a.Slot, true, a.Title)).ToArray()
+                ?? [],
+            RoleAccessGrants = membership == null ? [] : BuildRoleAccessGrantEntries(membership),
             LogisticsLevel = membership?.LogisticsLevel ?? 0,
             ResearchFacilityLevel = membership?.ResearchFacilityLevel ?? 0,
             InfrastructureLevel = membership?.InfrastructureLevel ?? 0,

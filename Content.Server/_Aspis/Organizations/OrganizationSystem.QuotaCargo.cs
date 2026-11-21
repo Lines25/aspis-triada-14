@@ -77,6 +77,10 @@ public sealed partial class OrganizationSystem
 
         _quotaManifestPrintCooldowns[character] = _gameTiming.CurTime;
         _hands.TryPickupAnyHand(actor, printed);
+        // If the assigned scanner was destroyed, printing a fresh waybill also
+        // reissues the physical instrument. The old stamp is never transferable.
+        IssueQuotaInspectionScanner(actor, claim);
+        IssueFrontierNavigator(actor, claim);
         _audio.PlayPvs(MoneyConfirmSound, actor);
         _audio.PlayPvs(QuotaManifestPrinterSound, actor);
         _adminLog.Add(LogType.Action, LogImpact.Low,
@@ -144,7 +148,8 @@ public sealed partial class OrganizationSystem
         // Only printouts issued by THIS server have OrganizationQuotaChipComponent.
         // An ordinary paper with a copied code can never create cargo orders.
         if (!_quotaCargoSystem.TryQueueOrganizationQuotaCrates(console, org.Id, claim.Code,
-                character.CharacterName, claim.Units, claim.CargoRequestedCrates, claim.PostTargets, out var queued))
+                character.CharacterName, claim.Units, claim.CargoRequestedCrates, claim.PostTargets, out var queued,
+                claim.Scenario.Id == FrontierScenarioId))
         {
             _quotaPopup.PopupEntity("Карго не приймає накладну. Перевірте Trade Mall, місткість черги та CrateTradeSecureNormal.",
                 args.User, args.User);

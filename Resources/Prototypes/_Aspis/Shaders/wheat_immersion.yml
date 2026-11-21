@@ -1,0 +1,4 @@
+- type: shader
+  id: AspisWheatLowerFade
+  kind: source
+  path: "/Textures/_Aspis/Shaders/wheat_lower_fade.swsl"

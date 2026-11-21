@@ -79,6 +79,13 @@
                                HorizontalExpand="True"
                                Align="Right"
                                FontColorOverride="#00ff2a"/>
+                        <!-- Aspis: round-local planetary flight readouts. -->
+                        <controls:Label Text="РЕЖИМ" FontColorOverride="#00ff2a"/>
+                        <controls:Label Name="AspisFlightMode" Text="КОСМОС"
+                               HorizontalExpand="True" Align="Right" FontColorOverride="#00ff2a"/>
+                        <controls:Label Text="СТАН" FontColorOverride="#00ff2a"/>
+                        <controls:Label Name="AspisFlightCondition" Text="НАВІГАЦІЯ"
+                               HorizontalExpand="True" Align="Right" FontColorOverride="#00ff2a"/>
                     </controls:GridContainer>
                     </controls:PanelContainer>
                     </controls:PanelContainer>

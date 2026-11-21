@@ -27,7 +27,8 @@ public sealed partial class OrganizationSystem
                 TryFindExportManifestInsideCrate(sold, out export))
                 TryCompleteQuotaExportOnSale(sold, export);
             if (!TryComp<OrganizationQuotaCrateComponent>(sold, out var manifest) ||
-                !_quotaCargoSystem.IsQuotaCrateAtDestination(sold, manifest))
+                !_quotaCargoSystem.IsQuotaCrateAtDestination(sold, manifest) ||
+                !CanSellQuotaDeliveryCrate(sold, manifest))
                 continue;
 
             // Each physical dispatch has a fresh opaque reference, and the quota

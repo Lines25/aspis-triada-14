@@ -173,6 +173,8 @@ public sealed partial class NavScreen : BoxContainer
             return;
         }
 
+        UpdateAspisPlanetaryReadouts(gridXform, gridBody);
+
         var (_, worldRot, worldMatrix) = _xformSystem.GetWorldPositionRotationMatrix(gridXform);
         var worldPos = Vector2.Transform(gridBody.LocalCenter, worldMatrix);
 

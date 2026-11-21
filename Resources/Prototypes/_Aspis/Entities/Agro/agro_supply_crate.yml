@@ -1,0 +1,15 @@
+# Reuses the author's Agro_Station.yml entity in place of the CryoPod.
+# Dispenses exactly one physical herbicide flask on hand interaction.
+- type: entity
+  id: AspisAgroSupplyCrate
+  parent: BaseMachine
+  name: гербіцидний резервуар агростанції
+  description: Натисніть на резервуар, щоб отримати одну колбу. Повторне використання недоступне.
+  components:
+  - type: Sprite
+    sprite: _Aspis/Structures/Agro/herbicide_source.rsi
+    state: icon
+  - type: Transform
+    anchored: true
+  - type: InteractionOutline
+  - type: AspisAgroSupplyCrate

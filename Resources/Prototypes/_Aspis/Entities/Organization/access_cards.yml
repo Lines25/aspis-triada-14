@@ -1,0 +1,12 @@
+- type: entity
+  id: AspisOrganizationAccessCard
+  parent: IDCardStandard
+  name: корпоративна ID-картка
+  description: Локальна картка доступу для власності організації. Працює лише на корпоративних дверях.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    layers:
+    - state: default
+    - state: idpassenger
+  - type: OrganizationAccessCard

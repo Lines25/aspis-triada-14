@@ -1,0 +1,247 @@
+# Rare post-herbicide flora; six visual variants share the same gameplay.
+- type: entity
+  id: AspisAgroQuarantineNode01
+  name: диворослина
+  description: Вкрай рідкісна рослина, що виросла після обробки гербіцидом. Обережно зріжте зразок і доставте до Cargo.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+  - type: Clickable
+  - type: InteractionOutline
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree01
+    drawdepth: Objects
+  - type: PointLight
+    enabled: true
+    radius: 1.4
+    energy: 0.9
+    color: "#173A8A"
+  - type: AspisAgroQuarantineNode
+
+- type: entity
+  id: AspisAgroQuarantineSample01
+  parent: BaseItem
+  name: диворослина (зрізаний зразок)
+  description: Цінна рослина з опроміненої гербіцидом планети. Виставте на продаж через Cargo; фінанси й вплив нарахують компанії за оригінальним контрактом.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree01
+  - type: PointLight
+    enabled: true
+    radius: 1.1
+    energy: 0.75
+    color: "#173A8A"
+  - type: Item
+    size: Small
+  - type: StaticPrice
+    price: 1
+  - type: AspisAgroQuarantineSample
+
+- type: entity
+  id: AspisAgroQuarantineNode02
+  name: диворослина
+  description: Вкрай рідкісна рослина, що виросла після обробки гербіцидом. Обережно зріжте зразок і доставте до Cargo.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+  - type: Clickable
+  - type: InteractionOutline
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree02
+    drawdepth: Objects
+  - type: PointLight
+    enabled: true
+    radius: 1.4
+    energy: 0.9
+    color: "#173A8A"
+  - type: AspisAgroQuarantineNode
+
+- type: entity
+  id: AspisAgroQuarantineSample02
+  parent: BaseItem
+  name: диворослина (зрізаний зразок)
+  description: Цінна рослина з опроміненої гербіцидом планети. Виставте на продаж через Cargo; фінанси й вплив нарахують компанії за оригінальним контрактом.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree02
+  - type: PointLight
+    enabled: true
+    radius: 1.1
+    energy: 0.75
+    color: "#173A8A"
+  - type: Item
+    size: Small
+  - type: StaticPrice
+    price: 1
+  - type: AspisAgroQuarantineSample
+
+- type: entity
+  id: AspisAgroQuarantineNode03
+  name: диворослина
+  description: Вкрай рідкісна рослина, що виросла після обробки гербіцидом. Обережно зріжте зразок і доставте до Cargo.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+  - type: Clickable
+  - type: InteractionOutline
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree03
+    drawdepth: Objects
+  - type: PointLight
+    enabled: true
+    radius: 1.4
+    energy: 0.9
+    color: "#173A8A"
+  - type: AspisAgroQuarantineNode
+
+- type: entity
+  id: AspisAgroQuarantineSample03
+  parent: BaseItem
+  name: диворослина (зрізаний зразок)
+  description: Цінна рослина з опроміненої гербіцидом планети. Виставте на продаж через Cargo; фінанси й вплив нарахують компанії за оригінальним контрактом.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree03
+  - type: PointLight
+    enabled: true
+    radius: 1.1
+    energy: 0.75
+    color: "#173A8A"
+  - type: Item
+    size: Small
+  - type: StaticPrice
+    price: 1
+  - type: AspisAgroQuarantineSample
+
+- type: entity
+  id: AspisAgroQuarantineNode04
+  name: диворослина
+  description: Вкрай рідкісна рослина, що виросла після обробки гербіцидом. Обережно зріжте зразок і доставте до Cargo.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+  - type: Clickable
+  - type: InteractionOutline
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree04
+    drawdepth: Objects
+  - type: PointLight
+    enabled: true
+    radius: 1.4
+    energy: 0.9
+    color: "#173A8A"
+  - type: AspisAgroQuarantineNode
+
+- type: entity
+  id: AspisAgroQuarantineSample04
+  parent: BaseItem
+  name: диворослина (зрізаний зразок)
+  description: Цінна рослина з опроміненої гербіцидом планети. Виставте на продаж через Cargo; фінанси й вплив нарахують компанії за оригінальним контрактом.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree04
+  - type: PointLight
+    enabled: true
+    radius: 1.1
+    energy: 0.75
+    color: "#173A8A"
+  - type: Item
+    size: Small
+  - type: StaticPrice
+    price: 1
+  - type: AspisAgroQuarantineSample
+
+- type: entity
+  id: AspisAgroQuarantineNode05
+  name: диворослина
+  description: Вкрай рідкісна рослина, що виросла після обробки гербіцидом. Обережно зріжте зразок і доставте до Cargo.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+  - type: Clickable
+  - type: InteractionOutline
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree05
+    drawdepth: Objects
+  - type: PointLight
+    enabled: true
+    radius: 1.4
+    energy: 0.9
+    color: "#173A8A"
+  - type: AspisAgroQuarantineNode
+
+- type: entity
+  id: AspisAgroQuarantineSample05
+  parent: BaseItem
+  name: диворослина (зрізаний зразок)
+  description: Цінна рослина з опроміненої гербіцидом планети. Виставте на продаж через Cargo; фінанси й вплив нарахують компанії за оригінальним контрактом.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree05
+  - type: PointLight
+    enabled: true
+    radius: 1.1
+    energy: 0.75
+    color: "#173A8A"
+  - type: Item
+    size: Small
+  - type: StaticPrice
+    price: 1
+  - type: AspisAgroQuarantineSample
+
+- type: entity
+  id: AspisAgroQuarantineNode06
+  name: диворослина
+  description: Вкрай рідкісна рослина, що виросла після обробки гербіцидом. Обережно зріжте зразок і доставте до Cargo.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+  - type: Clickable
+  - type: InteractionOutline
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree06
+    drawdepth: Objects
+  - type: PointLight
+    enabled: true
+    radius: 1.4
+    energy: 0.9
+    color: "#173A8A"
+  - type: AspisAgroQuarantineNode
+
+- type: entity
+  id: AspisAgroQuarantineSample06
+  parent: BaseItem
+  name: диворослина (зрізаний зразок)
+  description: Цінна рослина з опроміненої гербіцидом планети. Виставте на продаж через Cargo; фінанси й вплив нарахують компанії за оригінальним контрактом.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/miracle_plant.rsi
+    state: tree06
+  - type: PointLight
+    enabled: true
+    radius: 1.1
+    energy: 0.75
+    color: "#173A8A"
+  - type: Item
+    size: Small
+  - type: StaticPrice
+    price: 1
+  - type: AspisAgroQuarantineSample
+

@@ -1,0 +1,37 @@
+# Shared planetary airspace foundation. Contract-specific chemical equipment
+# and the user's authored surface/base/parallax will be added separately.
+- type: entity
+  id: AspisPlanetaryParachute
+  parent: BaseItem
+  name: рятувальний парашут
+  description: Одноразовий засіб аварійного спуску з атмосферного шатла.
+  components:
+  - type: Sprite
+    sprite: Clothing/Back/Backpacks/backpack.rsi
+    state: icon
+  - type: Item
+    sprite: Clothing/Back/Backpacks/backpack.rsi
+    size: Small
+  - type: AspisPlanetaryParachute
+  - type: StaticPrice
+    price: 300
+
+- type: entity
+  id: AspisPlanetaryParachuteCrate
+  parent: CrateGenericSteel
+  name: комплект аварійних парашутів
+  components:
+  - type: StorageFill
+    contents:
+    - id: AspisPlanetaryParachute
+      amount: 2
+
+- type: cargoProduct
+  id: AspisPlanetaryParachutes
+  icon:
+    sprite: Clothing/Back/Backpacks/backpack.rsi
+    state: icon
+  product: AspisPlanetaryParachuteCrate
+  cost: 1200
+  category: cargoproduct-category-name-emergency
+  group: market
