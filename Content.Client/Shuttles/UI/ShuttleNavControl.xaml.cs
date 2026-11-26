@@ -556,6 +556,21 @@ public partial class ShuttleNavControl : BaseShuttleControl // Mono
         NfUpdateState(state); // Frontier Update State
     }
 
+    // Q2.5E: radar-only brightness correction. The stored IFF identity and
+    // name colours remain untouched; only hull geometry uses this tint.
+    private static Color AspisRadarReadableHull(Color source)
+    {
+        var lightness = 0.2126f * source.R + 0.7152f * source.G + 0.0722f * source.B;
+        const float target = 0.72f;
+        if (lightness >= target)
+            return new Color(source.R, source.G, source.B, 1f);
+
+        var blend = (target - lightness) / MathF.Max(0.01f, 1f - lightness);
+        return new Color(source.R + (1f - source.R) * blend,
+            source.G + (1f - source.G) * blend,
+            source.B + (1f - source.B) * blend, 1f);
+    }
+
     protected override void Draw(DrawingHandleScreen handle)
     {
         base.Draw(handle);
@@ -600,6 +615,10 @@ public partial class ShuttleNavControl : BaseShuttleControl // Mono
         var shuttleToView = Matrix3x2.CreateScale(new Vector2(MinimapScale, -MinimapScale)) * Matrix3x2.CreateTranslation(MidPointVector);
         var worldToView = worldToShuttle * shuttleToView;
 
+        // Aspis: local-only low-cost contour illustration. Real world tiles
+        // remain managed by the normal NavRadar and are never preloaded here.
+        DrawAspisPlanetaryContours(handle, mapPos.Position, xform.MapUid);
+
         // Draw shields
         DrawShields(handle, xform, worldToShuttle);
 
@@ -632,7 +651,7 @@ public partial class ShuttleNavControl : BaseShuttleControl // Mono
             var ourGridToView = ourGridToShuttle * shuttleToView;
             var color = _shuttles.GetIFFColor(ourGridId.Value, self: true);
 
-            DrawGrid(handle, ourGridToView, (ourGridId.Value, ourGrid), color);
+            DrawGrid(handle, ourGridToView, (ourGridId.Value, ourGrid), AspisRadarReadableHull(color));
             DrawDocks(handle, ourGridId.Value, ourGridToView);
         }
 
@@ -876,7 +895,7 @@ public partial class ShuttleNavControl : BaseShuttleControl // Mono
             // Mono
             if (!blipOnly)
             {
-                DrawGrid(handle, curGridToView, grid, labelColor);
+                DrawGrid(handle, curGridToView, grid, AspisRadarReadableHull(labelColor));
                 DrawDocks(handle, gUid, curGridToView);
             }
         }

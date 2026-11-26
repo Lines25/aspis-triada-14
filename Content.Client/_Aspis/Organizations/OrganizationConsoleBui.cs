@@ -3,6 +3,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Linq;
 using Content.Shared._Aspis.Organizations;
+using Content.Shared.Containers.ItemSlots;
 using Content.Client._Triad.Shipyard.Save;
 using JetBrains.Annotations;
 using Robust.Client.Graphics;
@@ -26,13 +27,20 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
         _window = this.CreateWindow<OrganizationConsoleWindow>();
         _window.GetOutpostBlueprintFiles = () =>
             EntMan.System<ShipFileManagementSystem>().GetSavedShipFiles()
-                .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase))
+                .Where(path => path.EndsWith(".yml", StringComparison.OrdinalIgnoreCase) ||
+                    path.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
                 .Take(64).ToArray();
         _window.OutpostBlueprintRequested += SubmitOutpostBlueprint;
         _window.FleetBlueprintRequested += SubmitFleetBlueprint;
         _window.FleetRentRequested += id => SendMessage(new OrganizationRentFleetShuttleMessage(id));
+        _window.LeaseIdSlotRequested += () => SendMessage(
+            new ItemSlotButtonPressedEvent("Aspis-OrganizationConsole-LeaseId"));
         _window.FleetListingRequested += (id, name, description, price) =>
             SendMessage(new OrganizationConfigureFleetListingMessage(id, name, description, price));
+        _window.FleetClearListingRequested += id =>
+            SendMessage(new OrganizationClearFleetListingMessage(id));
         _window.FleetReturnRequested += id => SendMessage(new OrganizationReturnFleetShuttleMessage(id));
         _window.OutpostPurchaseRequested += id => SendMessage(new OrganizationPurchaseOutpostMessage(id));
         _window.OutpostReplacementRequested += id => SendMessage(new OrganizationScheduleOutpostReplacementMessage(id));
@@ -56,11 +64,20 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
             SendMessage(message);
         };
         _window.BannerChooseRequested += ChooseBanner;
+        _window.UpdateDescriptionRequested += (id, description) =>
+            SendMessage(new OrganizationUpdateDescriptionMessage(id, description));
         _window.JoinRequested += id => SendMessage(new OrganizationJoinMessage(id));
         _window.ReviewRequested += (id, accept) => SendMessage(new OrganizationReviewMessage(id, accept));
-        _window.ConfigureRequested += (id, privacy, fee, color, rosterPublic, name, banner, updateBanner) =>
+        _window.ConfigureRequested += (id, privacy, fee, color, rosterPublic, name, banner, updateBanner, materialsLink) =>
             SendMessage(new OrganizationConfigureMessage(id, privacy, fee, color)
-            { RosterPublic = rosterPublic, Name = name, Banner = banner, UpdateBanner = updateBanner });
+            {
+                RosterPublic = rosterPublic,
+                Name = name,
+                Banner = banner,
+                UpdateBanner = updateBanner,
+                UpdateMaterialsLink = true,
+                MaterialsLink = materialsLink
+            });
         _window.PayrollPolicyRequested += (id, amount, automatic, percent) =>
             SendMessage(new OrganizationPayrollPolicyMessage(id, amount)
             { Automatic = automatic, ProfitPercent = percent });
@@ -73,8 +90,8 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
         _window.InvestRequested += (id, scope, focus, amount, target) =>
             SendMessage(new OrganizationInvestMessage(id, scope, focus, amount, target));
         _window.FulfillOrderRequested += id => SendMessage(new OrganizationFulfillOrderMessage(id));
-        _window.QuotaClaimRequested += (id, category, slot) =>
-            SendMessage(new OrganizationClaimQuotaMessage(id, category, slot));
+        _window.QuotaClaimRequested += (id, category, slot, units) =>
+            SendMessage(new OrganizationClaimQuotaMessage(id, category, slot, units));
         _window.QuotaCompleteRequested += (id, category, slot) =>
             SendMessage(new OrganizationCompleteQuotaMessage(id, category, slot));
         _window.QuotaReleaseRequested += (id, category, slot) =>
@@ -93,6 +110,16 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
         _window.SetRoleRequested += (id, member, role) => SendMessage(new OrganizationSetRoleMessage(id, member, role));
         _window.SetPermissionsRequested += (id, role, permissions) =>
             SendMessage(new OrganizationSetPermissionsMessage(id, role, permissions));
+        _window.PurchaseAccessSlotRequested += (id, slot) =>
+            SendMessage(new OrganizationPurchaseAccessSlotMessage(id, slot));
+        _window.RenameAccessSlotRequested += (id, slot, title) =>
+            SendMessage(new OrganizationRenameAccessSlotMessage(id, slot, title));
+        _window.SetRoleAccessMaskRequested += (id, roleKey, mask) =>
+            SendMessage(new OrganizationSetRoleAccessMaskMessage(id, roleKey, mask));
+        _window.SetAccessSlotRolesRequested += (id, slot, keys) =>
+            SendMessage(new OrganizationSetAccessSlotRolesMessage(id, slot, keys));
+        _window.PrintAccessCardRequested += (id, roleKey, slot) =>
+            SendMessage(new OrganizationPrintAccessCardMessage(id, roleKey, slot));
         _window.DividendPolicyRequested += (id, percent) =>
             SendMessage(new OrganizationDividendPolicyMessage(id, percent));
         _window.DividendClaimRequested += id =>
@@ -202,7 +229,7 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
                 _window.SetFleetLocalNotice("Некоректний або завеликий файл шатла (до 12 млн символів).");
                 return;
             }
-            var leaf = filePath[(filePath.LastIndexOf('/') + 1)..];
+            var leaf = filePath[(Math.Max(filePath.LastIndexOf('/'), filePath.LastIndexOf('\\')) + 1)..];
             await SendBlueprintInChunks(organization, leaf, contents, OrganizationBlueprintUploadKind.Fleet);
             if (_window is { Disposed: false })
                 _window.SetFleetLocalNotice("Креслення передано на серверну перевірку.");
@@ -233,7 +260,7 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
                 _window.SetOutpostLocalNotice("Креслення перевищує ліміт 12 млн символів або пошкоджене.");
                 return;
             }
-            var leaf = filePath[(filePath.LastIndexOf('/') + 1)..];
+            var leaf = filePath[(Math.Max(filePath.LastIndexOf('/'), filePath.LastIndexOf('\\')) + 1)..];
             await SendBlueprintInChunks(organization, leaf, contents, OrganizationBlueprintUploadKind.Outpost);
             if (_window is { Disposed: false })
                 _window.SetOutpostLocalNotice("Креслення передано на серверну перевірку.");

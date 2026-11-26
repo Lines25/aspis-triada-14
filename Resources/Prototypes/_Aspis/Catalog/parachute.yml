@@ -1,0 +1,10 @@
+# Order an individual parachute from ordinary Cargo market terminals.
+- type: cargoProduct
+  id: AspisPlanetaryParachuteOrder
+  icon:
+    sprite: _Aspis/Clothing/Back/parachute.rsi
+    state: icon
+  product: AspisPlanetaryParachuteBackpack
+  cost: 1800
+  category: cargoproduct-category-name-service
+  group: market

@@ -1,0 +1,11 @@
+- type: entity
+  id: AspisFrontierRouteNavigator
+  parent: HandheldGPSBasic
+  name: маршрутний модуль «Далекий рубіж»
+  description: Прикладіть модуль до навігаційної консолі шатла. Після узгодження координат він сам утримуватиме курс і блокуватиме ручне пілотування до завершення етапу рейсу. На віддаленому посту той самий модуль запускає зворотний маршрут.
+  components:
+  - type: OrganizationFrontierNavigator
+  - type: StaticPrice
+    price: 0
+  - type: PhysicalComposition
+    materialComposition: {}

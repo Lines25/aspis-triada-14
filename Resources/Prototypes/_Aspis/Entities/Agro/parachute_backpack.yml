@@ -1,0 +1,21 @@
+# One functional planetary parachute. Deliberately does NOT inherit ClothingBackpack:
+# the inherited Storage/ContainerContainer/UserInterface made it a normal bag.
+- type: entity
+  id: AspisPlanetaryParachuteBackpack
+  parent: Clothing
+  name: планетарний парашут
+  description: Одягніть на спину перед стрибком. Одноразовий парашут без відділення для речей. Продається в Cargo, квота його не видає.
+  components:
+  - type: Sprite
+    sprite: _Aspis/Clothing/Back/parachute.rsi
+    state: icon
+  - type: Clothing
+    sprite: _Aspis/Clothing/Back/parachute.rsi
+    quickEquip: false
+    slots:
+    - back
+  - type: Item
+    size: Huge
+  - type: StaticPrice
+    price: 150
+  - type: AspisPlanetaryParachute

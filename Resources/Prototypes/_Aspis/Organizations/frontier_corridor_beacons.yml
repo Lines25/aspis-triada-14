@@ -1,0 +1,22 @@
+- type: entity
+  id: AspisFrontierLaneBeacon
+  name: "Маршрутний маяк"
+  description: "Навігаційна точка захищеного міжсекторного коридору."
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: /Textures/Effects/medi_holo.rsi
+    state: medi_holo
+    color: "#54C9FC99"
+    scale: 0.65, 0.65
+    noRot: true
+  - type: PointLight
+    radius: 5
+    energy: 0.8
+    color: "#54C9FC"
+    castShadows: false
+  - type: RadarBlip
+    visibleFromOtherGrids: true
+    radarColor: "#54C9FC"
+    scale: 1.2
+    shape: diamond

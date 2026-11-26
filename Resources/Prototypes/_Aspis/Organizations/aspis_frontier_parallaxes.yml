@@ -1,0 +1,35 @@
+- type: parallax
+  id: AspisFrontierAsteroids
+  layers:
+    - texture:
+        !type:ImageParallaxTextureSource
+        path: /Textures/Parallaxes/Asteroids.png
+      slowness: 0.93
+      tiled: false
+
+- type: parallax
+  id: AspisFrontierPlanet
+  layers:
+    - texture:
+        !type:ImageParallaxTextureSource
+        path: /Textures/Parallaxes/planet.png
+      slowness: 0.94
+      tiled: false
+
+- type: parallax
+  id: AspisFrontierGasGiant
+  layers:
+    - texture:
+        !type:ImageParallaxTextureSource
+        path: /Textures/Parallaxes/gas_giant.png
+      slowness: 0.94
+      tiled: false
+
+- type: parallax
+  id: AspisFrontierCorePlanet
+  layers:
+    - texture:
+        !type:ImageParallaxTextureSource
+        path: /Textures/Parallaxes/core_planet.png
+      slowness: 0.94
+      tiled: false

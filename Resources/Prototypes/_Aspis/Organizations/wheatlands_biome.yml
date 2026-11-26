@@ -1,0 +1,8 @@
+# The shared AspisWheatTerrain hook selects wheat, connected road corridors and clear landing/base soil.
+# Native biome streaming creates ONLY tile data, never physical wheat entities.
+- type: biomeTemplate
+  id: AspisWheatlands
+  layers:
+  - !type:BiomeTileLayer
+    threshold: -1
+    tile: FloorAspisWheat

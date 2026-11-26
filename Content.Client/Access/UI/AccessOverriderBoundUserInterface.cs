@@ -28,6 +28,7 @@ namespace Content.Client.Access.UI
             RefreshAccess();
             _window.Title = EntMan.GetComponent<MetaDataComponent>(Owner).EntityName;
             _window.OnSubmit += SubmitData;
+            _window.OnSubmitCorporateSlot += slot => SendMessage(new WriteCorporateAccessSlotMessage(slot));
             _window.OnCorporateTierSelected += tier => SendMessage(new WriteCorporateOutpostTierMessage(tier));
 
             _window.PrivilegedIdButton.OnPressed += _ => SendMessage(new ItemSlotButtonPressedEvent(PrivilegedIdCardSlotId));

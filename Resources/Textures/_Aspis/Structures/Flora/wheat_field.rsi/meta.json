@@ -1,0 +1,84 @@
+{
+  "version": 1,
+  "license": "CC-BY-SA-3.0",
+  "copyright": "chornozem",
+  "size": {
+    "x": 32,
+    "y": 32
+  },
+  "states": [
+    {
+      "name": "wheat"
+    },
+    {
+      "name": "wheat_back",
+      "directions": 4
+    },
+    {
+      "name": "wheat_base"
+    },
+    {
+      "name": "wheat_centr",
+      "directions": 4
+    },
+    {
+      "name": "wheat_left",
+      "directions": 4
+    },
+    {
+      "name": "wheat_right",
+      "directions": 4
+    },
+    {
+      "name": "wheat_0"
+    },
+    {
+      "name": "wheat_1"
+    },
+    {
+      "name": "wheat_2"
+    },
+    {
+      "name": "wheat_3"
+    },
+    {
+      "name": "wheat_4"
+    },
+    {
+      "name": "wheat_5"
+    },
+    {
+      "name": "wheat_6"
+    },
+    {
+      "name": "wheat_7"
+    },
+    {
+      "name": "wheat_8"
+    },
+    {
+      "name": "wheat_9"
+    },
+    {
+      "name": "wheat_10"
+    },
+    {
+      "name": "wheat_11"
+    },
+    {
+      "name": "wheat_12"
+    },
+    {
+      "name": "wheat_13"
+    },
+    {
+      "name": "wheat_14"
+    },
+    {
+      "name": "wheat_15"
+    },
+    {
+      "name": "wheat_mass"
+    }
+  ]
+}

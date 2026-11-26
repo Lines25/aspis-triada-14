@@ -207,7 +207,3 @@
             sprite: _Aspis/Mobs/Species/Vulpkanin/displacement.rsi
             state: shoes
   # Aspis end
-    hideLayersOnEquip: # Mono
-    - Hair
-    - HeadTop
-    - Snout

@@ -450,6 +450,21 @@ public sealed class OrganizationStockListingMessage(Guid organization, int quant
 /// TDF permissions, shareholder holdings or application lists in that state.
 /// </summary>
 [Serializable, NetSerializable]
+public sealed class OrganizationAccessProfileEntry(int slot, bool purchased, string title)
+{
+    public int Slot = slot;
+    public bool Purchased = purchased;
+    public string Title = title;
+}
+
+[Serializable, NetSerializable]
+public sealed class OrganizationRoleAccessGrantEntry(string roleKey, int accessMask)
+{
+    public string RoleKey = roleKey;
+    public int AccessMask = accessMask;
+}
+
+[Serializable, NetSerializable]
 public sealed class OrganizationPrivateStateMessage(OrganizationConsoleState state)
     : BoundUserInterfaceMessage
 {
@@ -558,6 +573,8 @@ public sealed class OrganizationConsoleState(
     public int PayrollProfitPercent = 30;
     public long PayrollAccrued;
     public OrganizationCustomRoleEntry[] CustomRoles = [];
+    public OrganizationAccessProfileEntry[] AccessProfiles = [];
+    public OrganizationRoleAccessGrantEntry[] RoleAccessGrants = [];
     public int LogisticsLevel;
     public int ResearchFacilityLevel;
     public int InfrastructureLevel;
@@ -589,6 +606,8 @@ public sealed class OrganizationConsoleState(
     public int QuotaBonusCycles;
     // A verified fleet blueprint is separate from the permanent outpost site.
     public string FleetBlueprintName = string.Empty;
+    public string FleetBlueprintHash = string.Empty;
+    public bool FleetListingApproved;
     public string FleetListingName = string.Empty;
     public string FleetListingDescription = string.Empty;
     public int FleetRentalPrice = OrganizationFleetRules.DefaultRentalPrice;
@@ -655,6 +674,9 @@ public sealed class OrganizationConfigureMessage(Guid organization, bool isPriva
     public string Name = string.Empty;
     public bool UpdateBanner;
     public byte[] Banner = [];
+    // Optional field: older clients keep the existing materials link unchanged.
+    public bool UpdateMaterialsLink;
+    public string MaterialsLink = string.Empty;
 }
 
 [Serializable, NetSerializable]
@@ -747,7 +769,9 @@ public enum OrganizationQuotaWorkflow : byte
     // Authenticated physical cargo-pallet sales of actual commercial products.
     TradeExport,
     // Keep previous workflow byte IDs stable for older versions and saved data.
-    PharmaceuticalExport
+    PharmaceuticalExport,
+    // Server-verified restoration of a physical ship at a sector shipyard.
+    ConstructionYard
 }
 
 // A faction's registered sector infrastructure (not a live spawned grid).
@@ -825,6 +849,9 @@ public sealed class OrganizationQuotaEntry(int category, int slot, string title,
     public int SecondsRemaining;
     public int TimeLimitMinutes;
     public int EstimatedReward;
+    // Stable server scenario identity and balance estimate; not player-submitted proof.
+    public string ScenarioId = string.Empty;
+    public int EstimatedWorkMinutes;
     public int Delivered;
     // Updated only by physical, server-verified pharmaceutical cargo sales.
     public string LastInspectionReport = string.Empty;
@@ -844,7 +871,7 @@ public sealed class OrganizationQuotaEntry(int category, int slot, string title,
 
 public static class OrganizationQuotaRules
 {
-    public const int SlotsPerCategory = 4;
+    public const int SlotsPerCategory = 5;
     public const int BonusCycles = 3;
     public const int MaximumIncomeBonusPercent = 15;
     public static int Difficulty(int slot) => Math.Clamp(slot + 1, 1, 4);
@@ -890,7 +917,8 @@ public static class OrganizationQuotaRules
             OrganizationIndustry.Research => OrganizationQuotaWorkflow.ResearchExport,
             OrganizationIndustry.Agriculture => OrganizationQuotaWorkflow.AgriculturalExport,
             OrganizationIndustry.Mining => OrganizationQuotaWorkflow.MiningExport,
-            OrganizationIndustry.Construction or OrganizationIndustry.Manufacturing => OrganizationQuotaWorkflow.IndustrialExport,
+            OrganizationIndustry.Construction => OrganizationQuotaWorkflow.ConstructionYard,
+            OrganizationIndustry.Manufacturing => OrganizationQuotaWorkflow.IndustrialExport,
             _ => OrganizationQuotaWorkflow.SectorService
         };
     }
@@ -948,9 +976,10 @@ public static class OrganizationQuotaRules
     {
         OrganizationQuotaWorkflow.CargoDelivery => "Доставка через Cargo Requests та пости A-D",
         OrganizationQuotaWorkflow.ResearchExport => "Експорт технологій, маркованих ящиків",
-        OrganizationQuotaWorkflow.AgriculturalExport => "Експорт аграрної продукції в ящиках",
+        OrganizationQuotaWorkflow.AgriculturalExport => "Аграрний експорт через Cargo або планетарна експедиція",
         OrganizationQuotaWorkflow.MiningExport => "Експорт руди й ресурсів в ящиках",
-        OrganizationQuotaWorkflow.IndustrialExport => "Постачання будівельних партій",
+        OrganizationQuotaWorkflow.IndustrialExport => "Постачання промислових партій",
+        OrganizationQuotaWorkflow.ConstructionYard => "Відновлення контрактного корабля на секторній верфі",
         OrganizationQuotaWorkflow.TradeExport => "Експорт торговельних товарів через Cargo",
         OrganizationQuotaWorkflow.MedicalTreatment => "Медична допомога: підтверджене лікування пацієнтів",
         OrganizationQuotaWorkflow.PharmaceuticalExport => "Експорт фармацевтичної продукції через Cargo",
@@ -1017,6 +1046,8 @@ public static class OrganizationQuotaRules
         if (kind == OrganizationKind.Faction)
             return $"{FocusTitle((OrganizationFactionFocus)category)}: " +
                 new[] { "Польове забезпечення", "Галузева експедиція", "Секторний проєкт", "Велика експедиція" }[slot];
+        if (industry == OrganizationIndustry.Construction)
+            return OrganizationConstructionContractRules.Title(slot);
         string[] names = industry switch
         {
             OrganizationIndustry.Delivery => ["Рейс постачання", "Маршрут торгових постів", "Міжстанційна логістика", "Великий конвой"],
@@ -1048,7 +1079,12 @@ public static class OrganizationQuotaRules
             OrganizationQuotaWorkflow.MiningExport =>
                 $"Здайте {crates} ящиків з рудою, від {ExportItemsPerCrate(workflow, slot)} одиниць на ящик. Сумки всередині ящика дозволені. Прикріпіть накладну.",
             OrganizationQuotaWorkflow.IndustrialExport =>
-                $"Підготуйте {crates} ящиків будматеріалів, від {ExportItemsPerCrate(workflow, slot)} одиниць на ящик. Прикріпіть накладну й здайте через Cargo.",
+                $"Підготуйте {crates} ящиків промислових матеріалів, від {ExportItemsPerCrate(workflow, slot)} одиниць на ящик. Прикріпіть накладну й здайте через Cargo.",
+            OrganizationQuotaWorkflow.ConstructionYard =>
+                "На спільній космічній мапі буде розгорнуто нерухому секторну верф із пошкодженим кораблем. " +
+                "Привезіть будматеріали з Trade Mall, відновіть усі відсутні частини корпусу й " +
+                "утримуйте його цілісним 20 секунд для серверної інспекції. " +
+                "Створення поста відбувається під час прийняття замовлення; інший Cargo-експорт не зараховується.",
             OrganizationQuotaWorkflow.TradeExport =>
                 $"Поставте {crates} ящиків товарів, не менше {ExportItemsPerCrate(workflow, slot)} одиниць на ящик. Вміст і накладну перевіряє Cargo.",
             OrganizationQuotaWorkflow.MedicalTreatment =>
@@ -1062,11 +1098,13 @@ public static class OrganizationQuotaRules
 }
 
 [Serializable, NetSerializable]
-public sealed class OrganizationClaimQuotaMessage(Guid organization, int category, int slot) : BoundUserInterfaceMessage
+public sealed class OrganizationClaimQuotaMessage(Guid organization, int category, int slot,
+    int frontierCrates = OrganizationFrontierCargoRules.Default) : BoundUserInterfaceMessage
 {
     public Guid Organization = organization;
     public int Category = category;
     public int Slot = slot;
+    public int FrontierCrates = frontierCrates; // A requested workload, NEVER cargo proof.
 }
 
 [Serializable, NetSerializable]
@@ -1269,6 +1307,45 @@ public sealed class OrganizationAssignCustomRoleMessage(Guid organization, Guid 
     public Guid Organization = organization;
     public Guid Member = member;
     public Guid Role = role;
+}
+
+[Serializable, NetSerializable]
+public sealed class OrganizationPurchaseAccessSlotMessage(Guid organization, int slot) : BoundUserInterfaceMessage
+{
+    public Guid Organization = organization;
+    public int Slot = slot;
+}
+
+[Serializable, NetSerializable]
+public sealed class OrganizationRenameAccessSlotMessage(Guid organization, int slot, string title) : BoundUserInterfaceMessage
+{
+    public Guid Organization = organization;
+    public int Slot = slot;
+    public string Title = title;
+}
+
+[Serializable, NetSerializable]
+public sealed class OrganizationSetRoleAccessMaskMessage(Guid organization, string roleKey, int accessMask) : BoundUserInterfaceMessage
+{
+    public Guid Organization = organization;
+    public string RoleKey = roleKey;
+    public int AccessMask = accessMask;
+}
+
+[Serializable, NetSerializable]
+public sealed class OrganizationSetAccessSlotRolesMessage(Guid organization, int slot, string[] roleKeys) : BoundUserInterfaceMessage
+{
+    public Guid Organization = organization;
+    public int Slot = slot;
+    public string[] RoleKeys = roleKeys;
+}
+
+[Serializable, NetSerializable]
+public sealed class OrganizationPrintAccessCardMessage(Guid organization, string roleKey, int primarySlot) : BoundUserInterfaceMessage
+{
+    public Guid Organization = organization;
+    public string RoleKey = roleKey;
+    public int PrimarySlot = primarySlot;
 }
 
 /// <summary>

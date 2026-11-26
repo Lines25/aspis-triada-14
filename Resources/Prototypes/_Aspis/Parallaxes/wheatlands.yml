@@ -1,0 +1,16 @@
+# Aspis planetary airspace: the user's 1024px wheatlands background and the
+# already-bundled Triada noise cloud texture. Never replace global Sky.
+- type: parallax
+  id: AspisWheatlandsSky
+  layers:
+  - texture:
+      !type:ImageParallaxTextureSource
+      path: "/Textures/_Aspis/Parallaxes/wheatlands_land.png"
+    slowness: 0.98
+    scale: "1, 1"
+  - texture:
+      !type:ImageParallaxTextureSource
+      path: "/Textures/Parallaxes/noise.png"
+    slowness: 0.95
+    scale: "2, 2"
+    scrolling: "0.14, -0.07"

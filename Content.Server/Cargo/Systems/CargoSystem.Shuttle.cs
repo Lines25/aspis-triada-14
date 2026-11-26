@@ -391,7 +391,9 @@ public sealed partial class CargoSystem
                 if (TryComp<Content.Server._Aspis.Organizations.OrganizationQuotaCrateComponent>(ent,
                         out var quotaManifest))
                 {
-                    if (IsQuotaCrateAtDestination(ent, quotaManifest))
+                    if (IsQuotaCrateAtDestination(ent, quotaManifest) &&
+                        EntityManager.System<Content.Server._Aspis.Organizations.OrganizationSystem>()
+                            .CanSellQuotaDeliveryCrate(ent, quotaManifest))
                         toSell.Add(ent);
                     continue;
                 }

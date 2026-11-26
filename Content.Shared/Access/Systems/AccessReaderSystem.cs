@@ -125,6 +125,13 @@ public sealed partial class AccessReaderSystem : EntitySystem
             return check.Authorized;
         }
 
+        if (TryComp<OrganizationPropertyAccessReaderComponent>(target, out _))
+        {
+            var check = new OrganizationPropertyAccessCheckEvent(user);
+            RaiseLocalEvent(target, check);
+            return check.Authorized;
+        }
+
         if (!reader.Enabled)
             return true;
 

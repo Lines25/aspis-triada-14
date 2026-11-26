@@ -1,0 +1,16 @@
+# Low-cost decorative green herbicide mist. No smoke chemistry, pressure,
+# flooding, edge spreading, poison or collider: safe for large biomes.
+- type: entity
+  id: AspisAgroGreenMist
+  name: зелена хмара гербіциду
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Effects/herbicide_mist.rsi
+    state: mist
+    drawdepth: Effects
+  - type: TimedDespawn
+    lifetime: 14
+  - type: Tag
+    tags:
+    - HideContextMenu

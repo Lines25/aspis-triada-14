@@ -1,0 +1,34 @@
+# A dedicated company-local configurator. The stock AccessOverrider UI handles
+# station tags, not dynamically purchased organization access slots.
+- type: entity
+  id: AspisOutpostAccessConfiguratorAdvanced
+  parent: BaseItem
+  name: корпоративний конфігуратор доступів
+  description: Налаштовує двері корпоративного аванпосту за придбаними доступами.
+  components:
+  - type: Sprite
+    sprite: Objects/Tools/access_configurator.rsi
+    state: icon
+  - type: Item
+    size: Small
+  - type: OrganizationOutpostConfigurator
+    advancedUi: true
+    selectedSlot: 1
+    cardSlot:
+      name: id-card-console-privileged-id
+      whitelist:
+        components:
+        - OrganizationAccessCard
+  - type: ItemSlots
+  - type: ContainerContainer
+    containers:
+      AspisOutpostAccessConfigurator-card: !type:ContainerSlot
+  - type: UserInterface
+    interfaces:
+      enum.OrganizationOutpostConfiguratorUiKey.Key:
+        type: OrganizationOutpostConfiguratorBui
+  - type: ActivatableUI
+    key: enum.OrganizationOutpostConfiguratorUiKey.Key
+    requiresComplex: true
+    requireActiveHand: false
+    singleUser: true

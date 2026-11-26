@@ -6,4 +6,4 @@
   description: Кадровий облік, службовий фонд і ринковий нагляд сектора.
   components:
   - type: AccessReader
-    access: [["TdfChiefEnforcer"], ["TdfLieutenant"], ["TdfPatrolTeamLeader"], ["GeneralTdfAccessBrig"]]
+    access: [["TdfChiefEnforcer"], ["TdfLieutenant"], ["TdfPatrolTeamLeader"]]

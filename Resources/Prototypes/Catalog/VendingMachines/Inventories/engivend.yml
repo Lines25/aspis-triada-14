@@ -5,6 +5,7 @@
     CrowbarYellow: 10 # Frontier: 8<10
     MaintenanceJack: 10 # Frontier
     Multitool: 10 # Frontier: 4<10
+    AccessConfigurator: 12 # Aspis: vanilla configurator with corporate ID mode
     ClothingEyesGlassesMeson: 10
     ClothingEyesGlassesThermal: 10 #Mono
     ClothingHeadHatWelding: 6

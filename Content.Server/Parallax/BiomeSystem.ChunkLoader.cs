@@ -309,6 +309,12 @@ public sealed partial class BiomeSystem
     {
         var active = _activeChunks[component];
 
+        // Q2.5B: a fast player can outrun the single-chunk-per-sweep
+        // cleanup by minutes, leaving two maps resident after transfer.
+        // Keep work bounded so cleanup cannot itself spike the server tick.
+        const int MaxUnloadsPerPass = 8;
+        var removed = 0;
+        var tiles = new List<(Vector2i, Tile)>(ChunkSize * ChunkSize);
         var loadedChunksList = component.LoadedChunks.ToList();
         for (int i = loadedChunksList.Count - 1; i >= 0; i--)
         {
@@ -316,9 +322,9 @@ public sealed partial class BiomeSystem
             if (active.Contains(chunk))
                 continue;
 
-            var tiles = new List<(Vector2i, Tile)>(ChunkSize * ChunkSize);
             UnloadChunk(component, gridUid, grid, chunk, seed, tiles);
-            return;
+            if (++removed >= MaxUnloadsPerPass)
+                break;
         }
     }
 }

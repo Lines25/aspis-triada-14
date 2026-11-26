@@ -19,6 +19,9 @@
   name: корпоративний аванпост (доступний для появи)
   components:
   - type: StationJobs
+    totalJobs: 8
+    jobList:
+      Contractor: 8
     availableJobs:
       Contractor: [8, 8]
   - type: StationSpawning

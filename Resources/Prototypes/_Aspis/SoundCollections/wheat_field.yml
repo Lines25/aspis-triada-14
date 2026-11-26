@@ -1,0 +1,6 @@
+- type: soundCollection
+  id: AspisStepWheat
+  files:
+  - /Audio/_Aspis/Footsteps/wheat1.ogg
+  - /Audio/_Aspis/Footsteps/wheat2.ogg
+  - /Audio/_Aspis/Footsteps/wheat3.ogg

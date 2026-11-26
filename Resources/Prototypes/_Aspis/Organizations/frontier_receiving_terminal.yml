@@ -1,0 +1,32 @@
+- type: entity
+  id: AspisFrontierReceivingTerminal
+  parent: BaseComputer
+  name: "Термінал далекого рубежу"
+  description: "Приймання контрактного вантажу за категоріями A, B, C, D. Один пост для всіх категорій."
+  components:
+  - type: OrganizationFrontierReceiving
+  - type: ActivatableUI
+    key: enum.OrganizationFrontierReceivingUiKey.Key
+  - type: UserInterface
+    interfaces:
+      enum.OrganizationFrontierReceivingUiKey.Key:
+        type: OrganizationFrontierReceivingBui
+      enum.WiresUiKey.Key:
+        type: WiresBoundUserInterface
+  - type: Sprite
+    sprite: Structures/Machines/computers.rsi
+    layers:
+    - map: ["computerLayerBody"]
+      state: computer
+    - map: ["computerLayerKeyboard"]
+      state: generic_keyboard
+    - map: ["computerLayerScreen"]
+      state: supply
+    - map: ["computerLayerKeys"]
+      state: generic_keys
+    - map: ["enum.WiresVisualLayers.MaintenancePanel"]
+      state: generic_panel_open
+  - type: PointLight
+    radius: 2
+    energy: 0.8
+    color: "#58B7E8"

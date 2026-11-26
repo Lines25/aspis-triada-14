@@ -96,6 +96,15 @@ public abstract partial class SharedBiomeSystem : EntitySystem
             return true;
         }
 
+        // Aspis: native wheatlands terrain does not allocate entities or persist
+        // road edits as ModifiedTiles. Connected roads follow world coordinates.
+        if (Content.Shared._Aspis.Organizations.AspisWheatTerrain.AppliesTo(layers))
+        {
+            var floor = Content.Shared._Aspis.Organizations.AspisWheatTerrain.GetFloor(indices.X, indices.Y);
+            tile = new Tile(TileDefManager[floor].TileId);
+            return true;
+        }
+
         return TryGetTile(indices, layers, seed, grid, out tile);
     }
 

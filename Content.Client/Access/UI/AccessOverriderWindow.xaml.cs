@@ -15,6 +15,15 @@ namespace Content.Client.Access.UI
     public sealed partial class AccessOverriderWindow : DefaultWindow
     {
         private readonly Dictionary<string, Button> _accessButtons = new();
+        private readonly BoxContainer _corporateAccessPanel = new()
+        {
+            Orientation = BoxContainer.LayoutOrientation.Vertical,
+            HorizontalExpand = true,
+            SeparationOverride = 4,
+            Visible = false
+        };
+
+        public event Action<int>? OnSubmitCorporateSlot;
 
         public event Action<List<ProtoId<AccessLevelPrototype>>>? OnSubmit;
         public event Action<OrganizationOutpostAccessTier>? OnCorporateTierSelected;
@@ -23,6 +32,7 @@ namespace Content.Client.Access.UI
         public AccessOverriderWindow()
         {
             RobustXamlLoader.Load(this);
+            AccessLevelGrid.Parent?.AddChild(_corporateAccessPanel);
             foreach (var (tier, name) in new[]
             {
                 (OrganizationOutpostAccessTier.Member, "Учасник"),
@@ -68,18 +78,50 @@ namespace Content.Client.Access.UI
 
         public void UpdateState(IPrototypeManager protoManager, AccessOverriderBoundUserInterfaceState state)
         {
-            CorporateAccessLabel.Visible = state.CorporateMode;
-            CorporateAccessGrid.Visible = state.CorporateMode;
-            AccessLevelGrid.Visible = !state.CorporateMode;
-            PrivilegedIdHeading.Visible = !state.CorporateMode;
-            PrivilegedIdButton.Visible = !state.CorporateMode;
-            PrivilegedIdLabel.Visible = !state.CorporateMode;
-            MissingPrivilegesLabel.Visible = !state.CorporateMode;
-            MissingPrivilegesText.Visible = !state.CorporateMode;
+            var cardMode = state.CorporateSlotTitles != null;
+            var legacyMode = state.CorporateMode && !cardMode;
+            CorporateAccessLabel.Visible = legacyMode;
+            CorporateAccessGrid.Visible = legacyMode;
+            AccessLevelGrid.Visible = !legacyMode && !cardMode;
+            PrivilegedIdHeading.Visible = !legacyMode;
+            PrivilegedIdButton.Visible = !legacyMode;
+            PrivilegedIdLabel.Visible = !legacyMode;
+            MissingPrivilegesLabel.Visible = !legacyMode && !cardMode;
+            MissingPrivilegesText.Visible = !legacyMode && !cardMode;
+            _corporateAccessPanel.Visible = cardMode;
+            if (cardMode)
+            {
+                _corporateAccessPanel.RemoveAllChildren();
+                _corporateAccessPanel.AddChild(new Label
+                {
+                    Text = "Корпоративні доступи",
+                    FontColorOverride = Color.FromHex("#DCE7F0")
+                });
+                _corporateAccessPanel.AddChild(new Label
+                {
+                    Text = state.CorporateNotice,
+                    FontColorOverride = Color.FromHex("#B4C7D8")
+                });
+                for (var i = 0; i < state.CorporateSlotTitles!.Length; i++)
+                {
+                    var slot = state.CorporateSlotIds![i];
+                    var button = new Button
+                    {
+                        Text = $"{slot}. {state.CorporateSlotTitles[i]}",
+                        ToggleMode = true,
+                        Pressed = (state.CorporateSelectedSlot & (1 << (slot - 1))) != 0,
+                        HorizontalExpand = true,
+                        MinHeight = 32,
+                        Disabled = !(state.CorporateSlotAvailable?[i] ?? false)
+                    };
+                    button.OnPressed += _ => OnSubmitCorporateSlot?.Invoke(slot);
+                    _corporateAccessPanel.AddChild(button);
+                }
+            }
 
             foreach (var (tier, button) in _corporateButtons)
             {
-                button.Visible = state.CorporateMode;
+                button.Visible = legacyMode;
                 button.Disabled = !state.CorporateTargetValid;
                 button.Pressed = state.CorporateTargetValid && state.CorporateCurrentTier == tier;
             }
@@ -112,7 +154,8 @@ namespace Content.Client.Access.UI
                 MissingPrivilegesText.Text = string.Join(", ", missingPrivileges);
             }
 
-            var interfaceEnabled = state.IsPrivilegedIdPresent && state.IsPrivilegedIdAuthorized;
+            var interfaceEnabled = !cardMode && !legacyMode &&
+                state.IsPrivilegedIdPresent && state.IsPrivilegedIdAuthorized;
 
             foreach (var (accessName, button) in _accessButtons)
             {

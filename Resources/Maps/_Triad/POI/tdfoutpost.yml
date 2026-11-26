@@ -1,11 +1,11 @@
 meta:
   format: 7
   category: Grid
-  engineVersion: 289.0.2
+  engineVersion: 289.0.7
   forkId: ""
   forkVersion: ""
-  time: 09/19/2026 11:55:48
-  entityCount: 9408
+  time: 11/20/2026 15:27:24
+  entityCount: 9422
 maps: []
 grids:
 - 1
@@ -8546,6 +8546,7 @@ entities:
       shakeTimes: 10
     - type: ChunkContainer
       chunkEntities: []
+    - type: GridSplitNode
   - uid: 3
     components:
     - type: MetaData
@@ -9502,23 +9503,6 @@ entities:
     - type: ContainedSolution
       containerName: lvcable
       container: 129
-  - uid: 138
-    components:
-    - type: MetaData
-      name: solution - food
-    - type: Transform
-      parent: 137
-    - type: Solution
-      solution:
-        name: food
-        maxVol: 10
-        reagents:
-        - ReagentId: Fiber
-          data: []
-          Quantity: 10
-    - type: ContainedSolution
-      containerName: food
-      container: 137
   - uid: 140
     components:
     - type: MetaData
@@ -13853,161 +13837,123 @@ entities:
     components:
     - type: Transform
       parent: 838
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 838
-      attachedEntity: 838
   - uid: 842
     components:
     - type: Transform
       parent: 841
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 841
-      attachedEntity: 841
   - uid: 845
     components:
     - type: Transform
       parent: 844
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 844
-      attachedEntity: 844
   - uid: 848
     components:
     - type: Transform
       parent: 847
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 847
-      attachedEntity: 847
   - uid: 851
     components:
     - type: Transform
       parent: 850
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 850
-      attachedEntity: 850
   - uid: 854
     components:
     - type: Transform
       parent: 853
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 853
-      attachedEntity: 853
   - uid: 857
     components:
     - type: Transform
       parent: 856
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 856
-      attachedEntity: 856
   - uid: 860
     components:
     - type: Transform
       parent: 859
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 859
-      attachedEntity: 859
   - uid: 863
     components:
     - type: Transform
       parent: 862
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 862
-      attachedEntity: 862
   - uid: 866
     components:
     - type: Transform
       parent: 865
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 865
-      attachedEntity: 865
   - uid: 869
     components:
     - type: Transform
       parent: 868
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 868
-      attachedEntity: 868
   - uid: 872
     components:
     - type: Transform
       parent: 871
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 871
-      attachedEntity: 871
   - uid: 875
     components:
     - type: Transform
       parent: 874
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 874
-      attachedEntity: 874
   - uid: 878
     components:
     - type: Transform
       parent: 877
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 877
-      attachedEntity: 877
   - uid: 881
     components:
     - type: Transform
       parent: 880
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 880
-      attachedEntity: 880
   - uid: 884
     components:
     - type: Transform
       parent: 883
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 883
-      attachedEntity: 883
   - uid: 887
     components:
     - type: Transform
       parent: 886
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 886
-      attachedEntity: 886
   - uid: 890
     components:
     - type: Transform
       parent: 889
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 889
-      attachedEntity: 889
 - proto: ActionToggleBlock
   entities:
   - uid: 893
     components:
     - type: Transform
       parent: 892
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 892
   - uid: 895
     components:
     - type: Transform
       parent: 894
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 894
 - proto: ActionToggleLight
   entities:
@@ -14015,92 +13961,74 @@ entities:
     components:
     - type: Transform
       parent: 149
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 149
   - uid: 154
     components:
     - type: Transform
       parent: 149
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 149
-      attachedEntity: 149
   - uid: 159
     components:
     - type: Transform
       parent: 155
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 155
   - uid: 160
     components:
     - type: Transform
       parent: 155
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 155
-      attachedEntity: 155
   - uid: 484
     components:
     - type: Transform
       parent: 481
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 481
   - uid: 485
     components:
     - type: Transform
       parent: 481
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 481
-      attachedEntity: 481
   - uid: 489
     components:
     - type: Transform
       parent: 486
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 486
   - uid: 490
     components:
     - type: Transform
       parent: 486
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 486
-      attachedEntity: 486
   - uid: 494
     components:
     - type: Transform
       parent: 491
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 491
   - uid: 495
     components:
     - type: Transform
       parent: 491
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 491
-      attachedEntity: 491
   - uid: 499
     components:
     - type: Transform
       parent: 496
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 496
   - uid: 500
     components:
     - type: Transform
       parent: 496
-    - type: InstantAction
-      originalIconColor: '#FFFFFFFF'
+    - type: Action
       container: 496
-      attachedEntity: 496
 - proto: AirAlarm
   entities:
   - uid: 896
@@ -35595,6 +35523,12 @@ entities:
       parent: 1
       rot: -1.5707963267948966 rad
       pos: -5.47372,-30.431211
+  - uid: 9419
+    components:
+    - type: Transform
+      parent: 1
+      rot: 3.141592653589793 rad
+      pos: -24.5,5.5
 - proto: ChairWood
   entities:
   - uid: 3854
@@ -36146,20 +36080,11 @@ entities:
       pos: 11.565002,14.624891
 - proto: ClothingHandsGlovesForensic
   entities:
-  - uid: 137
+  - uid: 9412
     components:
     - type: Transform
       parent: 1
-      rot: 0.0003684817929752171 rad
-      pos: -23.522846,-2.2634013
-    - type: SolutionContainerManager
-      solutions: null
-      containers:
-      - food
-    - type: ContainerContainer
-      containers:
-        solution@food: !type:ContainerSlot
-          ent: 138
+      pos: -24.484558,-3.3138514
 - proto: ClothingHandsGlovesLeather
   entities:
   - uid: 139
@@ -37418,6 +37343,50 @@ entities:
       nextSound: 21644.8847801
     - type: ApcPowerReceiver
       powerLoad: 5
+- proto: ComputerOrganizationRegistry
+  entities:
+  - uid: 9423
+    components:
+    - type: Transform
+      parent: 1
+      rot: 3.141592653589793 rad
+      pos: -26.5,4.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
+- proto: ComputerTdfMarketOversight
+  entities:
+  - uid: 4877
+    components:
+    - type: Transform
+      parent: 1
+      rot: 3.141592653589793 rad
+      pos: -24.5,4.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
+  - uid: 7149
+    components:
+    - type: Transform
+      parent: 1
+      rot: -1.5707963267948966 rad
+      pos: 8.5,1.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
+  - uid: 9410
+    components:
+    - type: Transform
+      parent: 1
+      rot: -1.5707963267948966 rad
+      pos: -24.5,-2.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
 - proto: ComputerTelevision
   entities:
   - uid: 3981
@@ -39074,6 +39043,23 @@ entities:
     - type: Transform
       parent: 1
       pos: 17.5,-21.5
+- proto: CottonBol
+  entities:
+  - uid: 9413
+    components:
+    - type: Transform
+      parent: 1
+      pos: -23.26783,-2.6018622
+  - uid: 9414
+    components:
+    - type: Transform
+      parent: 1
+      pos: -23.26783,-2.3831122
+  - uid: 9415
+    components:
+    - type: Transform
+      parent: 1
+      pos: -23.627205,-2.3987372
 - proto: CrateArtifactContainer
   entities:
   - uid: 4021
@@ -43652,7 +43638,7 @@ entities:
     - type: Label
       currentLabel: Astrotame
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.2829861
+      sprayFizzinessThresholdRoll: 0.012526438
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -43685,6 +43671,7 @@ entities:
         - !type:FlammableTileReaction
           temperatureMultiplier: 1.35
         color: '#FF7F3BFF'
+        standsout: False
         specificHeat: 1
         slipData:
           superSlippery: False
@@ -43788,7 +43775,7 @@ entities:
     - type: Label
       currentLabel: BBQ sauce
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.67835605
+      sprayFizzinessThresholdRoll: 0.78504866
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -43821,6 +43808,7 @@ entities:
         - !type:FlammableTileReaction
           temperatureMultiplier: 1.35
         color: '#664300FF'
+        standsout: False
         specificHeat: 1
         slipData:
           superSlippery: False
@@ -43934,6 +43922,7 @@ entities:
           coolingTemperature: 2
         - !type:SpillIfPuddlePresentTileReaction {}
         color: '#660099FF'
+        standsout: False
         specificHeat: 1
         slipData:
           superSlippery: False
@@ -44030,6 +44019,7 @@ entities:
           coolingTemperature: 2
         - !type:SpillIfPuddlePresentTileReaction {}
         color: '#660099FF'
+        standsout: False
         specificHeat: 1
         slipData:
           superSlippery: False
@@ -44118,7 +44108,7 @@ entities:
     - type: Label
       currentLabel: coldsauce
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.80035347
+      sprayFizzinessThresholdRoll: 0.17659113
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -44284,7 +44274,7 @@ entities:
     - type: Label
       currentLabel: horseradish sauce
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.59367836
+      sprayFizzinessThresholdRoll: 0.6652204
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -44308,7 +44298,7 @@ entities:
     - type: Label
       currentLabel: hotsauce
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.46753868
+      sprayFizzinessThresholdRoll: 0.8447858
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -44349,7 +44339,7 @@ entities:
     - type: Label
       currentLabel: ketchup
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.82129055
+      sprayFizzinessThresholdRoll: 0.56327605
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -44373,7 +44363,7 @@ entities:
     - type: Label
       currentLabel: mayonnaise
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.7931564
+      sprayFizzinessThresholdRoll: 0.8253342
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -44414,7 +44404,7 @@ entities:
     - type: Label
       currentLabel: mustard
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.4528356
+      sprayFizzinessThresholdRoll: 0.49949747
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -44447,6 +44437,7 @@ entities:
         - !type:FlammableTileReaction
           temperatureMultiplier: 1.35
         color: '#BC5550FF'
+        standsout: False
         specificHeat: 1
         slipData:
           superSlippery: False
@@ -44582,7 +44573,7 @@ entities:
     - type: Label
       currentLabel: soy sauce
     - type: PressurizedSolution
-      sprayFizzinessThresholdRoll: 0.007226348
+      sprayFizzinessThresholdRoll: 0.044369463
     - type: Physics
       canCollide: False
     - type: NameModifier
@@ -45616,6 +45607,11 @@ entities:
           endTime: 106.3589167
         storage:
           endTime: 106.3589167
+  - uid: 7062
+    components:
+    - type: Transform
+      parent: 1
+      pos: -26.5,3.5
 - proto: filingCabinetRandom
   entities:
   - uid: 256
@@ -45910,6 +45906,11 @@ entities:
         storage:
           startTime: 1287.0987129
           endTime: 230.0952334
+  - uid: 9422
+    components:
+    - type: Transform
+      parent: 1
+      pos: -26.5,3.5
 - proto: filingCabinetTallRandom
   entities:
   - uid: 343
@@ -48488,13 +48489,11 @@ entities:
       canCollide: False
 - proto: ForensicScanner
   entities:
-  - uid: 4877
+  - uid: 9411
     components:
     - type: Transform
       parent: 1
-      pos: -23.431526,-2.5331943
-    - type: Physics
-      canCollide: False
+      pos: -24.468933,-3.5013514
 - proto: GasMinerNitrogenStation
   entities:
   - uid: 4878
@@ -87278,6 +87277,9 @@ entities:
       parent: 1
       rot: -1.5707963267948966 rad
       pos: 11.447419,20.341478
+    - type: Absorbent
+      progress:
+        '#A9A9A9FF': 100
     - type: SolutionContainerManager
       solutions: null
       containers:
@@ -87299,6 +87301,9 @@ entities:
     - type: Transform
       parent: 1
       pos: -15.543217,27.589455
+    - type: Absorbent
+      progress:
+        '#A9A9A9FF': 100
     - type: SolutionContainerManager
       solutions: null
       containers:
@@ -93219,6 +93224,17 @@ entities:
       parent: 1
       rot: 3.141592653589793 rad
       pos: -24.5,2.5
+  - uid: 9417
+    components:
+    - type: Transform
+      parent: 1
+      pos: -24.5,4.5
+  - uid: 9418
+    components:
+    - type: Transform
+      parent: 1
+      rot: -1.5707963267948966 rad
+      pos: -25.5,6.5
 - proto: PlasmaWindoorSecureChiefEnforcerLocked
   entities:
   - uid: 4627
@@ -94081,6 +94097,16 @@ entities:
           occludes: True
     - type: Physics
       canCollide: False
+- proto: PlushieYarrMoth
+  entities:
+  - uid: 9416
+    components:
+    - type: MetaData
+      name: Космічний пірат
+      desc: Схоже ви таки змогли замкнути Космічного-Бомжа-Пірата за грати, так тримати капітане!
+    - type: Transform
+      parent: 1
+      pos: -23.432413,-2.647382
 - proto: PortableGeneratorJrPacman
   entities:
   - uid: 629
@@ -95541,7 +95567,7 @@ entities:
     - type: Transform
       parent: 3914
     - type: Pda
-      currentDate: 2828-08-28T11:00:00.0000000+07:00
+      currentDate: 2828-08-28T07:00:00.0000000+03:00
     - type: Physics
       canCollide: False
     - type: InsideEntityStorage
@@ -95718,6 +95744,12 @@ entities:
       parent: 1
       rot: -1.5707963267948966 rad
       pos: 25.5,17.5
+  - uid: 9409
+    components:
+    - type: Transform
+      parent: 1
+      rot: -1.5707963267948966 rad
+      pos: -24.5,-3.5
 - proto: RadarConsoleCircuitboard
   entities:
   - uid: 3989
@@ -95795,6 +95827,9 @@ entities:
     - type: Transform
       parent: 1
       pos: -21.10423,19.938025
+    - type: Absorbent
+      progress:
+        '#A9A9A9FF': 30
     - type: SolutionContainerManager
       solutions: null
       containers:
@@ -95818,6 +95853,9 @@ entities:
     - type: Transform
       parent: 1
       pos: -20.99814,19.790524
+    - type: Absorbent
+      progress:
+        '#A9A9A9FF': 30
     - type: SolutionContainerManager
       solutions: null
       containers:
@@ -96609,6 +96647,10 @@ entities:
     - type: Transform
       parent: 1
       pos: 3.5,-17.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
 - proto: ScreenTimer
   entities:
   - uid: 6937
@@ -98245,26 +98287,16 @@ entities:
       nextSound: 21638.2184279
     - type: ApcPowerReceiver
       powerLoad: 5
-  - uid: 7062
+  - uid: 9421
     components:
     - type: Transform
       parent: 1
-      rot: 1.5707963267948966 rad
-      pos: -26.5,3.5
-    - type: Battery
-      startingCharge: 0
-    - type: PointLight
-      enabled: True
-    - type: LanguageSpeaker
-      understoodLanguages:
-      - TauCetiBasic
-      spokenLanguages:
-      - TauCetiBasic
-      currentLanguage: TauCetiBasic
-    - type: SpamEmitSound
-      nextSound: 21654.3891539
+      rot: -1.5707963267948966 rad
+      pos: -24.5,3.5
     - type: ApcPowerReceiver
       powerLoad: 5
+    - type: Battery
+      startingCharge: 0
 - proto: StationAnchor
   entities:
   - uid: 7063
@@ -99401,11 +99433,6 @@ entities:
     - type: Transform
       parent: 1
       pos: 8.5,-0.5
-  - uid: 7149
-    components:
-    - type: Transform
-      parent: 1
-      pos: 8.5,1.5
   - uid: 7150
     components:
     - type: Transform
@@ -100062,6 +100089,9 @@ entities:
     - type: Transform
       parent: 1
       pos: -25.451061,8.546791
+    - type: Absorbent
+      progress:
+        '#A9A9A9FF': 30
     - type: Fiber
       fiberprint: 24E0120D249011
     - type: SolutionContainerManager
@@ -100090,6 +100120,9 @@ entities:
     - type: Transform
       parent: 1
       pos: -25.577303,8.751584
+    - type: Absorbent
+      progress:
+        '#A9A9A9FF': 30
     - type: Fiber
       fiberprint: 4F1DA1F3F60031
     - type: SolutionContainerManager
@@ -100150,8 +100183,6 @@ entities:
           startTime: 0
           length: 0
           endTime: 106.3589167
-    - type: MagnetPickup
-      nextScan: 21641.8631249
     - type: Physics
       canCollide: False
 - proto: TrashBakedBananaPeel
@@ -111363,26 +111394,6 @@ entities:
           endTime: 106.3589167
     - type: Physics
       canCollide: False
-- proto: WeaponRifleVigilRubber
-  entities:
-  - uid: 9366
-    components:
-    - type: Transform
-      parent: 1
-      pos: -19.476145,12.530757
-  - uid: 9367
-    components:
-    - type: Transform
-      parent: 1
-      pos: -19.700947,12.780757
-- proto: WeaponRifleMR3CRegistered
-  entities:
-  - uid: 7101
-    components:
-    - type: Transform
-      parent: 7100
-    - type: Physics
-      canCollide: False
 - proto: WeaponRifleBishop
   entities:
   - uid: 9368
@@ -111395,6 +111406,26 @@ entities:
     - type: Transform
       parent: 1
       pos: -13.506906,12.48909
+- proto: WeaponRifleMR3CRegistered
+  entities:
+  - uid: 7101
+    components:
+    - type: Transform
+      parent: 7100
+    - type: Physics
+      canCollide: False
+- proto: WeaponRifleVigilRubber
+  entities:
+  - uid: 9366
+    components:
+    - type: Transform
+      parent: 1
+      pos: -19.476145,12.530757
+  - uid: 9367
+    components:
+    - type: Transform
+      parent: 1
+      pos: -19.700947,12.780757
 - proto: WeaponShotgunDoubleBarreledTdfBastion
   entities:
   - uid: 7099
@@ -112885,6 +112916,20 @@ entities:
       powered: True
     - type: DoorBolt
       powered: True
+- proto: WindoorSecurePlasma
+  entities:
+  - uid: 138
+    components:
+    - type: Transform
+      parent: 1
+      rot: -1.5707963267948966 rad
+      pos: -23.5,-2.5
+  - uid: 9420
+    components:
+    - type: Transform
+      parent: 1
+      rot: -1.5707963267948966 rad
+      pos: -23.5,3.5
 - proto: WindoorSecureSecurityLocked
   entities:
   - uid: 4621

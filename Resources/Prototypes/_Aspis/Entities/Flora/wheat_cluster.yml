@@ -1,0 +1,61 @@
+# One 3x3-tile crop block. Interactions stay on a single entity.
+- type: entity
+  id: AspisWheatCluster
+  name: густе пшеничне поле
+  description: Суцільна ділянка колосся.
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Transform
+    anchored: true
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/wheat_cluster.rsi
+    state: cluster
+    drawdepth: FloorObjects
+  - type: AspisWheatPatch
+  - type: SpeedModifierContacts
+    walkSpeedModifier: 0.85
+    sprintSpeedModifier: 0.85
+  - type: Physics
+    bodyType: Static
+  - type: Fixtures
+    fixtures:
+      fix1:
+        shape:
+          !type:PhysShapeAabb
+          bounds: "-1.5,-1.5,1.5,1.5"
+        layer: [ SlipLayer ]
+        mask: [ ItemMask ]
+        density: 1000
+        hard: false
+  - type: Reactive
+    groups:
+      Flammable: [ Touch ]
+      Extinguish: [ Touch ]
+  - type: FootstepModifier
+    footstepSoundCollection:
+      collection: AspisStepWheat
+      params:
+        volume: 8
+  - type: StepTrigger
+    requiredTriggeredSpeed: 0
+    intersectRatio: 0.1
+    blacklist:
+      tags: [ Catwalk ]
+  - type: Flammable
+    fireSpread: true
+    alwaysCombustible: true
+    canExtinguish: true
+    damage:
+      types: { Heat: 2.5 }
+  - type: FireVisuals
+    sprite: Effects/fire.rsi
+    normalState: fire
+  - type: Damageable
+    damageModifierSet: Wood
+  - type: Destructible
+    thresholds:
+    - trigger: !type:DamageTrigger
+        damage: 20
+      behaviors:
+      - !type:DoActsBehavior
+        acts: [ "Destruction" ]

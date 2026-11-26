@@ -1,0 +1,12 @@
+# Lightweight foot-height veil, spawned only while a player stands on a wheat tile.
+# Does not collide and never changes layer ordering of projectiles or loose items.
+- type: entity
+  id: AspisWheatLegVeil
+  name: колосся біля ніг
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Structures/Flora/wheat_field.rsi
+    state: wheat_base
+    drawdepth: Mobs
+    color: "#FFFFFFB0"

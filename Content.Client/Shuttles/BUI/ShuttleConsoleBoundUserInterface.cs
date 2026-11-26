@@ -30,6 +30,11 @@ public sealed partial class ShuttleConsoleBoundUserInterface : BoundUserInterfac
 
         _window.RequestFTL += OnFTLRequest;
         _window.RequestBeaconFTL += OnFTLBeaconRequest;
+        // Permanent NAV buttons, never a right-click-only action.
+        // Send through the existing BUI so the server validates the actor,
+        // grid, flight map and docking state before a transfer.
+        _window.AspisNav.AspisTransferRequested += toAir =>
+            SendMessage(new Content.Shared._Aspis.Organizations.AspisPlanetaryTransferMessage(toAir));
         _window.RequestAutopilot += OnAutopilotRequest; // Mono
         _window.DockRequest += OnDockRequest;
         _window.UndockRequest += OnUndockRequest;

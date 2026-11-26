@@ -1,0 +1,15 @@
+# Uses the stock Fulton balloon sprite already shipped with Triada/SS14.
+# The parented entity follows the parachutist's authoritative transform.
+- type: entity
+  id: AspisAtmosphericFultonCanopy
+  name: atmospheric parachute canopy
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: Objects/Tools/fulton_balloon.rsi
+    state: fulton_balloon
+    drawdepth: Effects
+    noRot: true
+  - type: Tag
+    tags:
+    - HideContextMenu

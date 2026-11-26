@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Linq;
 using Robust.Shared.ContentPack;
 using Robust.Shared.Log;
 using Robust.Shared.Utility;
@@ -16,6 +17,7 @@ public sealed class OrganizationMemberRecord
     public string CustomTitle { get; set; } = string.Empty;
     public byte Distinction { get; set; }
     public Guid CustomRoleId { get; set; }
+    public DateTime JoinedAtUtc { get; set; }
 }
 
 public sealed class OrganizationApplicationRecord
@@ -44,6 +46,18 @@ public sealed class OrganizationCustomRoleRecord
     public Guid Id { get; set; }
     public string Title { get; set; } = string.Empty;
     public OrganizationPermission Permissions { get; set; }
+}
+
+public sealed class OrganizationAccessProfileRecord
+{
+    public int Slot { get; set; }
+    public string Title { get; set; } = string.Empty;
+}
+
+public sealed class OrganizationAccessRoleGrantRecord
+{
+    public string RoleKey { get; set; } = string.Empty;
+    public int AccessMask { get; set; }
 }
 
 public sealed class OrganizationPayrollAccountRecord
@@ -225,6 +239,7 @@ public sealed class OrganizationRecord
     public List<OrganizationFactionNodeRecord> FactionNodes { get; set; } = new();
     public List<OrganizationFactionFindingRecord> FactionFindings { get; set; } = new();
     public bool IsPrivate { get; set; }
+    public bool PrivateAccessPurchased { get; set; }
     public bool RosterPublic { get; set; } = true;
     public int PayrollPerMember { get; set; }
     public bool PayrollAutomatic { get; set; }
@@ -233,6 +248,8 @@ public sealed class OrganizationRecord
     public int QuotaIncomeBonusPercent { get; set; }
     public int QuotaBonusCycles { get; set; }
     public List<OrganizationCustomRoleRecord> CustomRoles { get; set; } = new();
+    public List<OrganizationAccessProfileRecord> AccessProfiles { get; set; } = new();
+    public List<OrganizationAccessRoleGrantRecord> AccessRoleGrants { get; set; } = new();
     public int LogisticsLevel { get; set; }
     public int ResearchFacilityLevel { get; set; }
     public int InfrastructureLevel { get; set; }
@@ -285,6 +302,8 @@ public sealed class OrganizationRecord
     // Independently registered work-shuttle design. Round rentals themselves are transient.
     public string FleetBlueprintName { get; set; } = string.Empty;
     public string FleetBlueprintHash { get; set; } = string.Empty;
+    // Persist exactly which signed blueprint was approved for this listing.
+    public string FleetApprovedBlueprintHash { get; set; } = string.Empty;
     public string FleetListingName { get; set; } = string.Empty;
     public string FleetListingDescription { get; set; } = string.Empty;
     public int FleetRentalPrice { get; set; } = OrganizationFleetRules.DefaultRentalPrice;
@@ -375,6 +394,19 @@ public sealed class OrganizationStore(IResourceManager resources, ILogManager lo
             Disable("Stored organization data is unreadable");
         _revision = latest?.Revision ?? 0;
         return latest ?? new OrganizationDocument();
+    }
+
+    // Older valid copy is a display-only recovery source; latest revision remains untouched.
+    public OrganizationDocument? LoadEarlierThan(long revision)
+    {
+        var first = Read(First);
+        var second = Read(Second);
+        var earlier = new[] { first, second }
+            .Where(doc => doc is { Revision: >= 0 } && doc.Revision < revision &&
+                          doc.Organizations is { Count: > 0 })
+            .OrderByDescending(doc => doc!.Revision)
+            .FirstOrDefault();
+        return earlier;
     }
 
     private OrganizationDocument? Read(ResPath path)

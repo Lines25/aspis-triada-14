@@ -47,6 +47,7 @@ public sealed partial class AccessOverriderSystem : SharedAccessOverriderSystem
             subs.Event<BoundUIClosedEvent>(OnClose);
             subs.Event<WriteToTargetAccessReaderIdMessage>(OnWriteToTargetAccessReaderIdMessage);
             subs.Event<WriteCorporateOutpostTierMessage>(OnWriteCorporateOutpostTierMessage);
+            subs.Event<WriteCorporateAccessSlotMessage>(OnCorporateAccessSlot);
         });
     }
 
@@ -110,6 +111,24 @@ public sealed partial class AccessOverriderSystem : SharedAccessOverriderSystem
             UpdateUserInterface(uid, component, args);
     }
 
+    // The stock device accepts a company ID, but may change only company-owned door readers.
+    // The organization system re-checks the actor, ID, slot, property and interaction range.
+    private void OnCorporateAccessSlot(EntityUid uid, AccessOverriderComponent component,
+        WriteCorporateAccessSlotMessage args)
+    {
+        if (HasComp<OrganizationOutpostConfiguratorComponent>(uid) ||
+            args.Actor is not { Valid: true } user ||
+            component.TargetAccessReaderId is not { Valid: true } target ||
+            component.PrivilegedIdSlot.Item is not { Valid: true } id)
+            return;
+
+        if (!EntityManager.System<OrganizationSystem>()
+                .TryConfigureCorporateDoor(uid, user, id, target, args.Slot))
+            _popupSystem.PopupEntity("Немає права змінювати корпоративний доступ цих дверей.", user, user);
+
+        UpdateUserInterface(uid, component, args);
+    }
+
     private void OnWriteToTargetAccessReaderIdMessage(EntityUid uid, AccessOverriderComponent component, WriteToTargetAccessReaderIdMessage args)
     {
         // This tool is a corporate-only key: never write global station tags.
@@ -118,6 +137,13 @@ public sealed partial class AccessOverriderSystem : SharedAccessOverriderSystem
         if (args.Actor is not { Valid: true } player)
             return;
 
+        // Never turn corporate ID privileges into global station access tags.
+        if (component.PrivilegedIdSlot.Item is { Valid: true } id &&
+            HasComp<OrganizationAccessCardComponent>(id))
+        {
+            UpdateUserInterface(uid, component, args);
+            return;
+        }
         TryWriteToTargetAccessReaderId(uid, args.AccessList, player, component);
 
         UpdateUserInterface(uid, component, args);
@@ -171,6 +197,26 @@ public sealed partial class AccessOverriderSystem : SharedAccessOverriderSystem
             TryComp<OrganizationOutpostDoorComponent>(component.TargetAccessReaderId, out var door)
             ? door.RequiredTier : OrganizationOutpostAccessTier.Member;
 
+        // Corporate cards replace the stock tag list on the same vanilla tool.
+        // The legacy separate-token configurator retains its existing tier UI.
+        string[]? corporateTitles = null;
+        int[]? corporateIds = null;
+        bool[]? corporateAvailable = null;
+        var corporateSelected = 0;
+        var corporateNotice = string.Empty;
+        if (!corporateMode &&
+            component.PrivilegedIdSlot.Item is { Valid: true } companyId &&
+            EntityManager.System<OrganizationSystem>().TryGetCorporateConfiguratorSlots(
+                companyId, component.TargetAccessReaderId,
+                out var titles, out var ids, out var enabled, out var selected, out var notice))
+        {
+            corporateTitles = titles;
+            corporateIds = ids;
+            corporateAvailable = enabled;
+            corporateSelected = selected;
+            corporateNotice = notice;
+        }
+
         AccessOverriderBoundUserInterfaceState newState;
 
         newState = new AccessOverriderBoundUserInterfaceState(
@@ -184,7 +230,12 @@ public sealed partial class AccessOverriderSystem : SharedAccessOverriderSystem
             targetLabelColor,
             corporateMode,
             corporateTargetValid,
-            corporateTier);
+            corporateTier,
+            corporateTitles,
+            corporateIds,
+            corporateAvailable,
+            corporateSelected,
+            corporateNotice);
 
         _userInterface.SetUiState(uid, AccessOverriderUiKey.Key, newState);
     }

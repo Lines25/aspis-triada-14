@@ -1,0 +1,11 @@
+# A cosmetic canopy displayed only while a traveller is falling.
+- type: entity
+  id: AspisAtmosphericChuteBalloon
+  name: парашутний купол
+  categories: [ HideSpawnMenu ]
+  components:
+  - type: Sprite
+    sprite: _Aspis/Effects/planetary_chute.rsi
+    state: balloon
+    drawdepth: OverMobs
+    scale: 1.7, 1.7

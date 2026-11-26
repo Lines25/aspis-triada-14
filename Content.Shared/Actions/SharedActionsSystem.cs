@@ -101,7 +101,24 @@ public abstract partial class SharedActionsSystem : EntitySystem
 
     private void OnGetState(Entity<ActionsComponent> ent, ref ComponentGetState args)
     {
-        args.State = new ActionsComponentState(GetNetEntitySet(ent.Comp.Actions));
+        // A queued/deleted action may temporarily remain in the holder's set,
+        // especially across map transfer. Do not ask GetNetEntitySet to resolve
+        // an entity with no MetaData. Never mutate live state from a snapshot
+        // callback: this may run inside parallel PVS serialization.
+        var actions = ent.Comp.Actions;
+        if (actions.All(action => !TerminatingOrDeleted(action) && HasComp<MetaDataComponent>(action)))
+        {
+            args.State = new ActionsComponentState(GetNetEntitySet(actions));
+            return;
+        }
+
+        var valid = new HashSet<EntityUid>(actions.Count);
+        foreach (var action in actions)
+        {
+            if (!TerminatingOrDeleted(action) && HasComp<MetaDataComponent>(action))
+                valid.Add(action);
+        }
+        args.State = new ActionsComponentState(GetNetEntitySet(valid));
     }
 
     /// <summary>

@@ -20,7 +20,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     public event Action<string, OrganizationKind, OrganizationIndustry, bool, int, string, int, int, int, int, int>? CreateRequested;
     public event Action<Guid>? JoinRequested;
     public event Action<Guid, bool>? ReviewRequested;
-    public event Action<Guid, bool, int, string, bool, string, byte[], bool>? ConfigureRequested;
+    public event Action<Guid, bool, int, string, bool, string, byte[], bool, string>? ConfigureRequested;
     public event Action<Guid, int, bool, int>? PayrollPolicyRequested;
     public event Action<Guid, Guid, string, OrganizationPermission>? SaveCustomRoleRequested;
     public event Action<Guid, Guid, Guid>? AssignCustomRoleRequested;
@@ -33,14 +33,19 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     public event Action<Guid, int, bool>? TransferRequested;
     public event Action<Guid, OrganizationMarketScope, OrganizationInvestmentFocus, int, Guid?>? InvestRequested;
     public event Action<Guid>? FulfillOrderRequested;
-    public event Action<Guid, int, int>? QuotaClaimRequested;
+    public event Action<Guid, int, int, int>? QuotaClaimRequested;
     public event Action<Guid, int, int>? QuotaCompleteRequested;
     public event Action<Guid, int, int>? QuotaReleaseRequested;
     public event Action<Guid, string>? FleetBlueprintRequested;
     public event Action<Guid>? FleetRentRequested;
+    public event Action? LeaseIdSlotRequested;
+    private bool _assetsFleetRentConfirm;
     public event Action<Guid, string, string, int>? FleetListingRequested;
+    public event Action<Guid>? FleetClearListingRequested;
     public event Action<Guid>? FleetReturnRequested;
     private string _fleetLocalNotice = string.Empty;
+    // A newly selected local file is NOT available for rent until the server accepts it.
+    private bool _fleetNeedsVerification;
     private bool _fleetRentConfirm;
     public void SetFleetLocalNotice(string message)
     {
@@ -53,11 +58,17 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     }
     public event Action<Guid>? ClaimLeadershipRequested;
     public event Action<Guid, Guid>? SetDeputyRequested;
+    public event Action<Guid, string>? UpdateDescriptionRequested;
     public event Action<Guid, OrganizationTitleSlot, string>? SetTitleRequested;
     public event Action<Guid, Guid, string>? SetMemberTitleRequested;
     public event Action<Guid, int, int, int, int>? ConfigureBudgetRequested;
     public event Action<Guid, OrganizationOperatingPolicy>? SetOperatingPolicyRequested;
     public event Action<Guid, OrganizationPermissionTier, OrganizationPermission>? SetPermissionsRequested;
+    public event Action<Guid, int>? PurchaseAccessSlotRequested;
+    public event Action<Guid, int, string>? RenameAccessSlotRequested;
+    public event Action<Guid, string, int>? SetRoleAccessMaskRequested;
+    public event Action<Guid, int, string[]>? SetAccessSlotRolesRequested;
+    public event Action<Guid, string, int>? PrintAccessCardRequested;
     public event Action<Guid, Guid, byte>? SetDistinctionRequested;
     public event Action<Guid, OrganizationStockOrder, int>? StockOrderRequested;
     public event Action<Guid, int>? StockListingRequested;
@@ -135,10 +146,19 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     private readonly BoxContainer _sharesBody = new() { Orientation = LayoutOrientation.Vertical, SeparationOverride = 6 };
     private readonly BoxContainer _tdfBody = new() { Orientation = LayoutOrientation.Vertical, SeparationOverride = 6 };
     private readonly BoxContainer _servicesBody = new() { Orientation = LayoutOrientation.Vertical, SeparationOverride = 8 };
+    // View-only navigation: no client-generated quota offers or proof messages.
+    private enum QuotaBoardType : byte { All, Space, Planetary, Expedition, Frontier, Sector }
+    private QuotaBoardType _quotaBoardType = QuotaBoardType.All;
+    private int _quotaBoardPage;
+    private const int QuotaBoardPageSize = 4;
+    private int _frontierRequestedCrates = OrganizationFrontierCargoRules.Default;
     private readonly BoxContainer _quotaShuttlesBody = new() { Orientation = LayoutOrientation.Vertical, SeparationOverride = 8 };
     private readonly BoxContainer _quotaActionsBody = new() { Orientation = LayoutOrientation.Vertical, SeparationOverride = 8 };
-    private bool _outpostOverviewExpanded = true;
-    private bool _assetsFleetExpanded = true;
+    private bool _outpostOverviewExpanded = false;
+    private string _fleetSelectedBlueprint = string.Empty;
+    private string _outpostSelectedBlueprint = string.Empty;
+    private bool _assetsFleetExpanded = false;
+    private bool _assetsAccessExpanded;
     private bool _assetsBranchesInfo;
     private readonly OptionButton _accessRoleSelector = new();
     private readonly OptionButton _stockSelector = new();
@@ -201,6 +221,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     private BoxContainer? _personalizationBannerPreview;
     private bool _developmentExpanded;
     private bool _personalizationExpanded;
+    private Guid? _descriptionDraftOrganization;
+    private string _descriptionDraft = string.Empty;
+    private string _descriptionServerValue = string.Empty;
     // Keep help rows and the economy section open across server-state UI refreshes.
     private bool _economyExpanded;
     private readonly HashSet<string> _expandedEconomyHelpRows = new();
@@ -715,7 +738,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
 
         var right = new BoxContainer { Orientation = LayoutOrientation.Vertical,
             VerticalExpand = true, MinWidth = 290, SeparationOverride = 8 };
-        // Active assignments belong above shuttle rentals: they are consulted
+        // Active assignments belong above the quota catalog: they are consulted
         // more often and need space for the expandable objective checklist.
         var accepted = BuildTitledPanel("Прийняті завдання", out var acceptedContent, true);
         accepted.MinHeight = 340;
@@ -724,13 +747,13 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         acceptedScroll.AddChild(_quotaActionsBody);
         acceptedContent.AddChild(acceptedScroll);
         right.AddChild(accepted);
-        var ships = BuildTitledPanel("Доступні шатли", out var shipsContent, true);
-        ships.MinHeight = 180;
-        var shipsScroll = new ScrollContainer { HScrollEnabled = false,
+        var catalog = BuildTitledPanel("Каталог завдань", out var catalogBody, true);
+        catalog.MinHeight = 190;
+        var catalogScroll = new ScrollContainer { HScrollEnabled = false,
             HorizontalExpand = true, VerticalExpand = true };
-        shipsScroll.AddChild(_quotaShuttlesBody);
-        shipsContent.AddChild(shipsScroll);
-        right.AddChild(ships);
+        catalogScroll.AddChild(_quotaShuttlesBody);
+        catalogBody.AddChild(catalogScroll);
+        right.AddChild(catalog);
         layout.AddChild(right);
         return layout;
     }
@@ -763,7 +786,13 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 _state.FactionNextTaskSeconds > 0
                     ? $"через {_state.FactionNextTaskSeconds / 60} хв {_state.FactionNextTaskSeconds % 60} с"
                     : "доступне, якщо є вільна локація");
-        var available = _state.SectorQuotas.Where(q => !q.ReservedByUs).ToArray();
+        var allAvailable = _state.SectorQuotas.Where(q => !q.ReservedByUs).ToArray();
+        var matching = allAvailable.Where(q => _quotaBoardType == QuotaBoardType.All ||
+            ClassifyQuotaBoardType(q) == _quotaBoardType).ToArray();
+        var numberOfPages = Math.Max(1, (matching.Length + QuotaBoardPageSize - 1) / QuotaBoardPageSize);
+        _quotaBoardPage = Math.Clamp(_quotaBoardPage, 0, numberOfPages - 1);
+        RenderQuotaBoardNavigation(allAvailable, matching.Length, numberOfPages);
+        var available = matching.Skip(_quotaBoardPage * QuotaBoardPageSize).Take(QuotaBoardPageSize).ToArray();
         foreach (var quota in available)
         {
             var panel = BuildQuotaCard(quota, out var body);
@@ -776,21 +805,68 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                     _expandedFactionStepLists, _expandedFactionStepDetails, false);
             }
             else
-                body.AddChild(new Label { Text = WrapText(quota.Description, 54),
+                body.AddChild(new Label { Text = WrapText(
+                    quota.ScenarioId == "company.delivery.frontier"
+                        ? quota.Description.Replace("Перевезіть 40 фізичних",
+                            $"Перевезіть {_frontierRequestedCrates} фізичних")
+                            .Replace("Завантажте всі 40 ящиків",
+                                $"Завантажте всі {_frontierRequestedCrates} ящиків")
+                        : quota.Description, 54),
                     FontColorOverride = Color.FromHex("#BECBD7") });
             if (!quota.IsFactionOperation)
             {
-                AddMetric(body, "Обсяг", quota.Workflow == OrganizationQuotaWorkflow.MedicalTreatment
-                    ? $"{quota.Units} пацієнтів" : $"{quota.Units} ящиків");
+                AddMetric(body, "Обсяг", quota.Workflow == OrganizationQuotaWorkflow.ConstructionYard
+                    ? "1 контрактний корабель" : quota.Workflow == OrganizationQuotaWorkflow.AgriculturalExport && quota.Slot == 4
+                    ? "1 колба гербіциду · обробка поля" : quota.Workflow == OrganizationQuotaWorkflow.MedicalTreatment
+                    ? $"{quota.Units} пацієнтів" : quota.ScenarioId == "company.delivery.frontier"
+                    ? $"{_frontierRequestedCrates} ящиків (обираєте ви)" : $"{quota.Units} ящиків");
+                if (quota.ScenarioId == "company.delivery.frontier")
+                {
+                    var workloadRow = new BoxContainer
+                    {
+                        Orientation = LayoutOrientation.Horizontal,
+                        HorizontalExpand = true,
+                        SeparationOverride = 6
+                    };
+                    var workload = new LineEdit
+                    {
+                        Text = _frontierRequestedCrates.ToString(),
+                        PlaceHolder = "20–80 ящиків",
+                        MinWidth = 92,
+                        HorizontalExpand = true
+                    };
+                    workloadRow.AddChild(workload);
+                    var applyWorkload = new Button { Text = "Застосувати", MinHeight = 32 };
+                    applyWorkload.OnPressed += _ =>
+                    {
+                        if (int.TryParse(workload.Text, out var requested) &&
+                            OrganizationFrontierCargoRules.Valid(requested))
+                        {
+                            _frontierRequestedCrates = requested;
+                            RefreshServices();
+                        }
+                        else
+                            workload.Text = _frontierRequestedCrates.ToString();
+                    };
+                    workloadRow.AddChild(applyWorkload);
+                    body.AddChild(new Label { Text = "Оберіть будь-яку кількість від 20 до 80. Підтвердьте перед прийняттям.",
+                        FontColorOverride = Color.FromHex("#A7BECF") });
+                    body.AddChild(workloadRow);
+                    AddMetric(body, "Розподіл A–D", string.Join("  /  ",
+                        OrganizationFrontierCargoRules.Destinations(_frontierRequestedCrates)));
+                }
                 if (quota.Workflow != OrganizationQuotaWorkflow.CargoDelivery)
                     AddMetric(body, "Виконання", quota.Workflow switch
                     {
                         OrganizationQuotaWorkflow.SectorService => "Очікує профільної системи",
                         OrganizationQuotaWorkflow.MedicalTreatment => "Реальна допомога пацієнтам",
+                        OrganizationQuotaWorkflow.AgriculturalExport when quota.Slot == 4 => "Отримати диск і флетпак · забрати колбу · заправити · увімкнути розпилення",
+                        OrganizationQuotaWorkflow.ConstructionYard => "Ремонт корпусу на секторній верфі",
                         _ => "Вантажні ящики з накладною"
                     });
             }
             AddMetric(body, "Термін", $"{quota.TimeLimitMinutes} хв");
+            AddMetric(body, "Планова активна робота", $"≈ {quota.EstimatedWorkMinutes} хв");
             if (quota.Workflow == OrganizationQuotaWorkflow.PharmaceuticalExport)
             {
                 var targetPost = Array.FindIndex(quota.PostTargets, count => count > 0);
@@ -806,9 +882,15 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             }
             else
             {
-                AddMetric(body, "Орієнтовна оплата", $"≈ {quota.EstimatedReward:N0} $",
+                var estimate = quota.ScenarioId == "company.delivery.frontier"
+                    ? quota.EstimatedReward * _frontierRequestedCrates / OrganizationFrontierCargoRules.Default
+                    : quota.EstimatedReward;
+                AddMetric(body, "Орієнтовна оплата", $"≈ {estimate:N0} $",
                     Color.FromHex("#A1D8BB"));
-                AddMetric(body, "Вплив у секторі", $"до +{quota.SectorInfluenceBp / 100f:0.00}%",
+                var influence = quota.ScenarioId == "company.delivery.frontier"
+                    ? OrganizationFrontierCargoRules.InfluenceBasisPoints(_frontierRequestedCrates)
+                    : quota.SectorInfluenceBp;
+                AddMetric(body, "Вплив у секторі", $"до +{influence / 100f:0.00}%",
                     Color.FromHex("#A1D8BB"));
             }
             if (org.Kind == OrganizationKind.Company)
@@ -823,15 +905,25 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 Disabled = quota.Workflow == OrganizationQuotaWorkflow.SectorService && !quota.IsFactionOperation,
                 MinHeight = 32
             };
-            accept.OnPressed += _ => QuotaClaimRequested?.Invoke(org.Id, quota.Category, quota.Slot);
+            accept.OnPressed += _ => QuotaClaimRequested?.Invoke(org.Id, quota.Category, quota.Slot,
+                quota.ScenarioId == "company.delivery.frontier"
+                    ? _frontierRequestedCrates : OrganizationFrontierCargoRules.Default);
             body.AddChild(accept);
+            if (quota.Workflow == OrganizationQuotaWorkflow.AgriculturalExport && quota.Slot == 4)
+                OrganizationFactionStepUi.AddTo(body, quota.FactionSteps,
+                    $"agro:offer:{quota.Category}:{quota.Slot}",
+                    _expandedFactionStepLists, _expandedFactionStepDetails, false);
             _servicesBody.AddChild(panel);
         }
         if (available.Length == 0)
-            _servicesBody.AddChild(new Label { Text = org.Kind == OrganizationKind.Faction
-                ? "Доступних завдань наразі немає. Перевірте згодом."
+            _servicesBody.AddChild(new Label { Text = matching.Length == 0 && allAvailable.Length != 0
+                ? "У цьому напрямку зараз немає вільних завдань. Оберіть іншу категорію."
                 : "Вільних квот зараз немає. Перевірте після оновлення.",
                 FontColorOverride = Color.FromHex("#AFC0CE") });
+
+        // Bottom of the scrollable task list, as requested. Right-hand controls
+        // remain visible independently via RenderQuotaBoardNavigation().
+        _servicesBody.AddChild(BuildQuotaPageControls(numberOfPages));
 
         var active = _state.SectorQuotas.Where(q => q.ReservedByUs && !q.Completed).ToArray();
         foreach (var quota in active)
@@ -847,12 +939,19 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             else
                 body.AddChild(new Label { Text = WrapText(quota.Description, 38),
                     FontColorOverride = Color.FromHex("#B8C7D5") });
+            if (quota.Workflow == OrganizationQuotaWorkflow.AgriculturalExport && quota.Slot == 4)
+                OrganizationFactionStepUi.AddTo(body, quota.FactionSteps, quota.Code,
+                    _expandedFactionStepLists, _expandedFactionStepDetails, true);
             AddMetric(body, quota.IsFactionOperation ? "Код завдання" : "Код замовлення", quota.Code);
             AddMetric(body, "Прийняв", quota.AssignedTo + (quota.AssignedToMe ? " (ви)" : ""));
             AddMetric(body, "Прогрес", quota.IsFactionOperation
                 ? $"{quota.FactionSteps.Count(step => step.Completed)} / {quota.FactionSteps.Length} етапів"
                 : quota.Workflow == OrganizationQuotaWorkflow.MedicalTreatment
                 ? $"{quota.Delivered} / {quota.Units} пацієнтів"
+                : quota.Workflow == OrganizationQuotaWorkflow.ConstructionYard
+                ? $"Відновлено {quota.LastInspectionQuality}% корпусу"
+                : quota.Workflow == OrganizationQuotaWorkflow.AgriculturalExport
+                ? $"Обробка поля: {quota.Delivered} / {quota.Units} · 1 колба"
                 : $"{quota.Delivered} / {quota.Units} ящиків");
             if (quota.IsFactionOperation)
             {
@@ -861,6 +960,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                         quota.FactionSiteLabel, Color.FromHex("#A4D4B2"));
             }
             AddMetric(body, "Термін", $"{quota.TimeLimitMinutes} хв");
+            AddMetric(body, "Планова активна робота", $"≈ {quota.EstimatedWorkMinutes} хв");
             if (quota.Workflow == OrganizationQuotaWorkflow.PharmaceuticalExport)
             {
                 var targetPost = Array.FindIndex(quota.PostTargets, count => count > 0);
@@ -875,6 +975,12 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 AddMetric(body, "Орієнтовна оплата", $"≈ {quota.EstimatedReward:N0} $",
                     Color.FromHex("#A1D8BB"));
             AddMetric(body, "Залишилося", $"{quota.SecondsRemaining / 60} хв {quota.SecondsRemaining % 60} с");
+            if (quota.Workflow == OrganizationQuotaWorkflow.ConstructionYard)
+                AddMetric(body, "Інструмент", "Будівельний SRD на верфі: заряд +1 за 5 с, лише для членів компанії");
+            if (quota.Workflow == OrganizationQuotaWorkflow.ConstructionYard &&
+                !string.IsNullOrWhiteSpace(quota.LastInspectionReport))
+                AddMetric(body, "Верф / інспекція", quota.LastInspectionReport,
+                    quota.LastInspectionQuality < 100 ? Color.FromHex("#E3BC83") : Color.FromHex("#A1D8BB"));
             if (quota.Workflow == OrganizationQuotaWorkflow.PharmaceuticalExport &&
                 quota.RejectedShipments > 0)
                 AddMetric(body, "Відхилено партій", quota.RejectedShipments.ToString(),
@@ -898,10 +1004,16 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 }
             }
             if (quota.Workflow == OrganizationQuotaWorkflow.CargoDelivery)
-                body.AddChild(new Label { Text = "Отримання вантажу: Trade Mall",
-                    FontColorOverride = Color.FromHex("#9DB7C8") });
+                body.AddChild(new Label
+                {
+                    Text = quota.ScenarioId == "company.delivery.frontier"
+                        ? "Здача: фізична платформа Далекого рубежу. Потім повернення тим самим шатлом."
+                        : "Здача вантажу: відповідний торговий пост A–D",
+                    FontColorOverride = Color.FromHex("#9DB7C8")
+                });
             var release = new Button { Text = "Відмовитися від завдання", MinHeight = 31,
-                Disabled = quota.IsFactionOperation && quota.Delivered > 0 };
+                Disabled = (quota.IsFactionOperation && quota.Delivered > 0) ||
+                    quota.Workflow == OrganizationQuotaWorkflow.ConstructionYard };
             release.OnPressed += _ => QuotaReleaseRequested?.Invoke(org.Id, quota.Category, quota.Slot);
             body.AddChild(release);
             _quotaActionsBody.AddChild(panel);
@@ -918,12 +1030,16 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             AddMetric(_quotaActionsBody, "Виконано цього раунду", completed.ToString(),
                 Color.FromHex("#A4D4B2"));
         foreach (var finished in _state.SectorQuotas.Where(q => q.ReservedByUs && q.Completed &&
-                     q.Workflow == OrganizationQuotaWorkflow.PharmaceuticalExport &&
+                     (q.Workflow == OrganizationQuotaWorkflow.PharmaceuticalExport ||
+                      q.Workflow == OrganizationQuotaWorkflow.ConstructionYard) &&
                      !string.IsNullOrWhiteSpace(q.LastInspectionReport)))
         {
             var report = BuildQuotaCard(finished, out var details);
             AddMetric(details, "Завершена квота", finished.Code);
-            AddMetric(details, "Якість поставки", $"{finished.LastInspectionQuality}%",
+            AddMetric(details,
+                finished.Workflow == OrganizationQuotaWorkflow.ConstructionYard
+                    ? "Відновлення корпусу" : "Якість поставки",
+                $"{finished.LastInspectionQuality}%",
                 Color.FromHex("#A4D4B2"));
             if (finished.RejectedShipments > 0)
                 AddMetric(details, "Відхилено партій", finished.RejectedShipments.ToString(),
@@ -941,83 +1057,198 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             AddMetric(_quotaActionsBody, "Ліміт компанії", $"{_state.DailyGrossRevenue:N0} / {_state.DailyCompanyLimit:N0} $");
         }
 
-        var fleet = BuildTitledPanel("Транспорт для квоти", out var fleetBody);
-        AddMetric(fleetBody, "Назва", string.IsNullOrEmpty(_state.FleetListingName)
-            ? "Шатл ще не підготовлений" : _state.FleetListingName);
-        if (!string.IsNullOrEmpty(_state.FleetListingDescription))
-            fleetBody.AddChild(new Label { Text = WrapText(_state.FleetListingDescription, 38),
-                FontColorOverride = Color.FromHex("#BBCAD7") });
-        AddMetric(fleetBody, "Ціна на раунд", $"{_state.FleetRentalPrice:N0} $");
-        AddMetric(fleetBody, "Статус", _state.FleetShuttleIssued
-            ? (_state.FleetShuttlePresent ? "Зараз орендований" :
-                _state.FleetShuttleReturned ? "Повернуто в цьому раунді" : "Втрачений у цьому раунді")
-            : _state.FleetBlueprintReady ? "Доступний для оренди" : "Ще не виставлений");
-        if (!string.IsNullOrEmpty(_state.FleetError))
-            fleetBody.AddChild(new Label { Text = WrapText(_state.FleetError, 35),
-                FontColorOverride = Color.FromHex("#E6A5A5") });
-        fleetBody.AddChild(new Label { Text = "Креслення та умови оренди змінюються в розділі «Активи».",
-            FontColorOverride = Color.FromHex("#A2B3C1") });
-        _quotaShuttlesBody.AddChild(fleet);
-
-        if (_state.FleetShuttleIssued)
+        // The small right pane is reserved for catalog navigation. Renting a
+        // company-owned shuttle remains possible in this collapsed section
+        // of the active-contract panel; do not remove this existing workflow.
+        if (org.Kind == OrganizationKind.Company)
         {
-            AddMetric(_quotaActionsBody, "Робочий шатл",
-                _state.FleetShuttlePresent ? $"{_state.FleetIssuedName}, до кінця раунду" :
-                    _state.FleetShuttleReturned ? "Повернуто. Наступна оренда в новому раунді." :
-                    "Втрачено в цьому раунді. Повторна оренда недоступна.",
-                Color.FromHex(_state.FleetShuttlePresent ? "#A5D0B0" : "#E5BAA5"));
-            if (_state.FleetShuttlePresent && _state.FleetRenterIsMe)
+            var fleet = BuildFoldout("Транспорт та оренда", out var fleetBody);
+            AddMetric(fleetBody, "Назва", string.IsNullOrEmpty(_state.FleetListingName)
+                ? "Шатл ще не підготовлений" : _state.FleetListingName);
+            if (!string.IsNullOrEmpty(_state.FleetListingDescription))
+                fleetBody.AddChild(new Label { Text = WrapText(_state.FleetListingDescription, 38),
+                    FontColorOverride = Color.FromHex("#BBCAD7") });
+            AddMetric(fleetBody, "Ціна на раунд", $"{_state.FleetRentalPrice:N0} $");
+            AddMetric(fleetBody, "Статус", _state.FleetShuttleIssued
+                ? (_state.FleetShuttlePresent ? "Зараз орендований" :
+                    _state.FleetShuttleReturned ? "Повернуто в цьому раунді" : "Втрачений у цьому раунді")
+                : _state.FleetBlueprintReady && _state.FleetListingApproved
+                    ? "Доступний для оренди" : "Очікує затвердження");
+            if (!string.IsNullOrEmpty(_state.FleetError))
+                fleetBody.AddChild(new Label { Text = WrapText(_state.FleetError, 35),
+                    FontColorOverride = Color.FromHex("#E6A5A5") });
+            fleetBody.AddChild(new Label { Text = "Креслення та умови оренди змінюються в розділі «Активи».",
+                FontColorOverride = Color.FromHex("#A2B3C1") });
+            _quotaActionsBody.AddChild(fleet);
+
+            if (_state.FleetShuttleIssued)
             {
-                var returnButton = new Button { Text = "Повернути шатл", MinHeight = 33,
-                    ToolTip = "Повернення доступне лише коли на мапі шатла не залишилося гравців" };
-                var confirmReturn = false;
-                returnButton.OnPressed += _ =>
+                AddMetric(fleetBody, "Робочий шатл",
+                    _state.FleetShuttlePresent ? $"{_state.FleetIssuedName}, до кінця раунду" :
+                        _state.FleetShuttleReturned ? "Повернуто. Наступна оренда в новому раунді." :
+                        "Втрачено в цьому раунді. Повторна оренда недоступна.",
+                    Color.FromHex(_state.FleetShuttlePresent ? "#A5D0B0" : "#E5BAA5"));
+                if (_state.FleetShuttlePresent && _state.FleetRenterIsMe)
                 {
-                    if (!confirmReturn)
+                    var returnButton = new Button { Text = "Повернути шатл", MinHeight = 33,
+                        ToolTip = "Повернення доступне лише коли на мапі шатла не залишилося гравців" };
+                    var confirmReturn = false;
+                    returnButton.OnPressed += _ =>
                     {
-                        confirmReturn = true;
-                        returnButton.Text = "Підтвердити повернення";
-                        returnButton.Modulate = Color.FromHex("#E6AC80");
+                        if (!confirmReturn)
+                        {
+                            confirmReturn = true;
+                            returnButton.Text = "Підтвердити повернення";
+                            returnButton.Modulate = Color.FromHex("#E6AC80");
+                            return;
+                        }
+                        returnButton.Disabled = true;
+                        FleetReturnRequested?.Invoke(org.Id);
+                    };
+                    fleetBody.AddChild(returnButton);
+                }
+            }
+            else if (_state.FleetBlueprintReady && _state.FleetListingApproved)
+            {
+                var rent = new Button {
+                    Text = _fleetRentConfirm
+                        ? $"Підтвердити оплату: {_state.FleetRentalPrice:N0} $"
+                        : $"Орендувати на раунд: {_state.FleetRentalPrice:N0} $",
+                    MinHeight = 36,
+                    Disabled = active.Length == 0 || _state.ViewingAnotherCharacter ||
+                        _state.Role == OrganizationMemberRole.Owner,
+                    Modulate = _fleetRentConfirm ? Color.FromHex("#E67575") : Color.White
+                };
+                rent.OnPressed += _ =>
+                {
+                    if (!_fleetRentConfirm)
+                    {
+                        _fleetRentConfirm = true;
+                        rent.Text = $"Підтвердити оплату: {_state.FleetRentalPrice:N0} $";
+                        rent.Modulate = Color.FromHex("#E67575");
                         return;
                     }
-                    returnButton.Disabled = true;
-                    FleetReturnRequested?.Invoke(org.Id);
+                    _fleetRentConfirm = false;
+                    FleetRentRequested?.Invoke(org.Id);
                 };
-                _quotaActionsBody.AddChild(returnButton);
+                fleetBody.AddChild(rent);
+                fleetBody.AddChild(new Label { Text =
+                    "Орендар сплачує з особистого рахунку. Власник не орендує власний шатл.",
+                    FontColorOverride = Color.FromHex("#A7B7C6") });
             }
+            else
+                fleetBody.AddChild(new Label {
+                    Text = "Для оренди власник має виставити шатл у підвкладці «Активи».",
+                    FontColorOverride = Color.FromHex("#A7B7C6") });
         }
-        else if (_state.FleetBlueprintReady)
+
+    }
+
+    private static QuotaBoardType ClassifyQuotaBoardType(OrganizationQuotaEntry quota)
+    {
+        // Q2.5E: the farm mission is a planetary activity, not generic cargo.
+        // Preserve all existing industry, faction, shipyard, and frontier routes.
+        if (quota.Workflow == OrganizationQuotaWorkflow.AgriculturalExport)
+            return quota.Slot == 4 ? QuotaBoardType.Planetary : QuotaBoardType.Space;
+        if (quota.ScenarioId == "company.delivery.frontier")
+            return QuotaBoardType.Frontier;
+        if (quota.IsFactionOperation)
+            return quota.ScenarioId.Contains(".planet.", StringComparison.Ordinal)
+                ? QuotaBoardType.Planetary : QuotaBoardType.Expedition;
+        if (quota.Workflow is OrganizationQuotaWorkflow.CargoDelivery or OrganizationQuotaWorkflow.ConstructionYard)
+            return QuotaBoardType.Space;
+        return QuotaBoardType.Sector;
+    }
+
+    private void RenderQuotaBoardNavigation(OrganizationQuotaEntry[] allAvailable, int filteredCount, int numberOfPages)
+    {
+        var tabs = new (QuotaBoardType Type, string Label)[]
         {
-            var rent = new Button {
-                Text = _fleetRentConfirm
-                    ? $"Підтвердити оплату: {_state.FleetRentalPrice:N0} $"
-                    : $"Орендувати на раунд: {_state.FleetRentalPrice:N0} $",
-                MinHeight = 36,
-                Disabled = active.Length == 0 || _state.ViewingAnotherCharacter ||
-                    _state.Role == OrganizationMemberRole.Owner,
-                Modulate = _fleetRentConfirm ? Color.FromHex("#E67575") : Color.White
-            };
-            rent.OnPressed += _ =>
+            (QuotaBoardType.All, "Усі"),
+            (QuotaBoardType.Space, "Космічні"),
+            (QuotaBoardType.Planetary, "Планетарні"),
+            (QuotaBoardType.Expedition, "Експедиції"),
+            (QuotaBoardType.Frontier, "Далекий рубіж"),
+            (QuotaBoardType.Sector, "Секторні")
+        };
+        _quotaShuttlesBody.AddChild(new Label
+        {
+            Text = "Напрямок завдань",
+            FontColorOverride = Color.FromHex("#CAD7E2")
+        });
+        for (var i = 0; i < tabs.Length; i += 2)
+        {
+            var row = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
+                HorizontalExpand = true, SeparationOverride = 5 };
+            for (var j = i; j < Math.Min(i + 2, tabs.Length); j++)
             {
-                if (!_fleetRentConfirm)
+                var (type, name) = tabs[j];
+                var count = type == QuotaBoardType.All ? allAvailable.Length :
+                    allAvailable.Count(q => ClassifyQuotaBoardType(q) == type);
+                var button = new Button
                 {
-                    _fleetRentConfirm = true;
-                    rent.Text = $"Підтвердити оплату: {_state.FleetRentalPrice:N0} $";
-                    rent.Modulate = Color.FromHex("#E67575");
-                    return;
-                }
-                _fleetRentConfirm = false;
-                FleetRentRequested?.Invoke(org.Id);
-            };
-            _quotaActionsBody.AddChild(rent);
-            _quotaActionsBody.AddChild(new Label { Text =
-                "Орендар сплачує з особистого рахунку. Власник не орендує власний шатл.",
-                FontColorOverride = Color.FromHex("#A7B7C6") });
+                    Text = $"{name} ({count})",
+                    HorizontalExpand = true,
+                    MinHeight = 30,
+                    Disabled = count == 0 && _quotaBoardType != type,
+                    Modulate = _quotaBoardType == type ? Color.FromHex("#8FCEB1") : Color.White
+                };
+                button.OnPressed += _ =>
+                {
+                    _quotaBoardType = type;
+                    _quotaBoardPage = 0;
+                    RefreshServices();
+                };
+                row.AddChild(button);
+            }
+            _quotaShuttlesBody.AddChild(row);
         }
-        else
-            _quotaActionsBody.AddChild(new Label {
-                Text = "Для оренди власник має виставити шатл у підвкладці «Активи».",
-                FontColorOverride = Color.FromHex("#A7B7C6") });
+        _quotaShuttlesBody.AddChild(new Label
+        {
+            Text = $"У списку: {filteredCount}. Показано до {QuotaBoardPageSize} завдань на сторінці.",
+            FontColorOverride = Color.FromHex("#A5B9C8")
+        });
+        _quotaShuttlesBody.AddChild(BuildQuotaPageControls(numberOfPages));
+    }
+
+    // The same page controls are offered both in the right-hand catalog and
+    // at the end of the scrollable quota cards, without duplicating page state.
+    private BoxContainer BuildQuotaPageControls(int numberOfPages)
+    {
+        // Narrow right sidebar: keep buttons on their own row so page text
+        // cannot overlap or shrink the Next button.
+        var paging = new BoxContainer { Orientation = LayoutOrientation.Vertical,
+            SeparationOverride = 4, HorizontalExpand = true };
+        var buttons = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
+            SeparationOverride = 7, HorizontalExpand = true };
+        var previous = new Button { Text = "Попередня", MinHeight = 32,
+            HorizontalExpand = true, Disabled = _quotaBoardPage <= 0 };
+        previous.OnPressed += _ =>
+        {
+            if (_quotaBoardPage <= 0)
+                return;
+            _quotaBoardPage--;
+            RefreshServices();
+        };
+        buttons.AddChild(previous);
+        var next = new Button { Text = "Наступна", MinHeight = 32,
+            HorizontalExpand = true, Disabled = _quotaBoardPage >= numberOfPages - 1 };
+        next.OnPressed += _ =>
+        {
+            if (_quotaBoardPage >= numberOfPages - 1)
+                return;
+            _quotaBoardPage++;
+            RefreshServices();
+        };
+        buttons.AddChild(next);
+        paging.AddChild(buttons);
+        paging.AddChild(new Label
+        {
+            Text = $"Сторінка {_quotaBoardPage + 1}/{numberOfPages}",
+            HorizontalAlignment = HAlignment.Center,
+            FontColorOverride = Color.FromHex("#CED9E2")
+        });
+        return paging;
     }
 
     private static PanelContainer BuildQuotaCard(OrganizationQuotaEntry quota, out BoxContainer body)
@@ -1102,9 +1333,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             detail.AddChild(squares);
             if (level < 5)
             {
-                AddMetric(detail, "Умови", $"{neededAuthority} авторитету · {level + 1} завдань · {cost:N0} $");
+                AddMetric(detail, "Умови", $"{neededAuthority} авторитету, {level + 1} завдань, {cost:N0} $");
                 var chosen = branch;
-                var upgrade = new Button { Text = $"Розвинути програму · {cost:N0} $", MinHeight = 34,
+                var upgrade = new Button { Text = $"Розвинути програму — {cost:N0} $", MinHeight = 34,
                     Disabled = !fulfilled || _state.Treasury < cost ||
                         !HasRight(OrganizationPermission.Investments) };
                 upgrade.OnPressed += _ => DevelopmentRequested?.Invoke(org.Id, chosen, 1);
@@ -1161,9 +1392,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             HorizontalExpand = true, SeparationOverride = 5 };
         foreach (var step in new[]
         {
-            ("01 · Креслення", _state.OutpostBlueprintReady),
-            ("02 · Станція", _state.OutpostOwned),
-            ("03 · Розгортання", _state.OutpostDeployed)
+            ("01. Креслення", _state.OutpostBlueprintReady),
+            ("02. Станція", _state.OutpostOwned),
+            ("03. Розгортання", _state.OutpostDeployed)
         })
             outpostSteps.AddChild(new PanelContainer { HorizontalExpand = true,
                 PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex(
@@ -1229,9 +1460,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             {
                 var display = new LineEdit { Text = string.IsNullOrWhiteSpace(_state.OutpostPublicName)
                     ? org.Name + " | аванпост" : _state.OutpostPublicName,
-                    PlaceHolder = "Назва станції · 3–52 знаки", MinHeight = 31 };
+                    PlaceHolder = "Назва станції (3–52 знаки)", MinHeight = 31 };
                 var description = new LineEdit { Text = _state.OutpostPublicDescription,
-                    PlaceHolder = "Короткий опис для Join · до 200 знаків", MinHeight = 31 };
+                    PlaceHolder = "Короткий опис для Join (до 200 знаків)", MinHeight = 31 };
                 var visitors = new CheckBox { Text = "Дозволити появу сторонніх відвідувачів",
                     Pressed = _state.OutpostAllowVisitors,
                     ToolTip = "Дозвіл діє лише якщо встановлено безпечний публічний маяк з відкритим маршрутом." };
@@ -1275,26 +1506,33 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 for (var i = 0; i < files.Length; i++)
                 {
                     var filename = files[i];
-                    var slash = filename.LastIndexOf('/');
+                    var slash = Math.Max(filename.LastIndexOf('/'), filename.LastIndexOf('\\'));
                     selector.AddItem(filename[(slash + 1)..], i);
                 }
-                selector.SelectId(0);
-                var chosenIndex = 0;
+                var chosenIndex = Array.IndexOf(files, _outpostSelectedBlueprint);
+                if (chosenIndex < 0) chosenIndex = 0;
+                _outpostSelectedBlueprint = files[chosenIndex];
+                selector.SelectId(chosenIndex);
                 selector.OnItemSelected += args =>
                 {
+                    if (args.Id < 0 || args.Id >= files.Length) return;
                     chosenIndex = args.Id;
-                    selector.SelectId(args.Id);
+                    _outpostSelectedBlueprint = files[chosenIndex];
+                    selector.SelectId(chosenIndex);
                 };
+                outpostBody.AddChild(new Label { Text = $"Креслення: {files.Length} файл(ів)",
+                    FontColorOverride = Color.FromHex("#AFC0D0") });
                 outpostBody.AddChild(selector);
                 var stage = new Button { Text = "Перевірити та зберегти креслення", MinHeight = 34 };
                 stage.OnPressed += _ =>
                 {
                     if (chosenIndex >= 0 && chosenIndex < files.Length)
                     {
+                        _outpostSelectedBlueprint = files[chosenIndex];
                         _outpostPurchaseConfirm = false;
                         _outpostReplaceConfirm = false;
                         _outpostLocalNotice = "Перевірка збереженого шатла...";
-                        OutpostBlueprintRequested?.Invoke(org.Id, files[chosenIndex]);
+                        OutpostBlueprintRequested?.Invoke(org.Id, _outpostSelectedBlueprint);
                     }
                 };
                 outpostBody.AddChild(stage);
@@ -1360,7 +1598,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             outpostBody.AddChild(new Label { Text =
                 "Для появи після перезапуску маяки мають бути в підписаному кресленні. Поки доступний лише вхід учасників компанії; публічний вхід відвідувачів потребує перевірки відкритого маршруту.",
                 FontColorOverride = Color.FromHex("#ABB8C5") });
-            var keyButton = new Button { Text = "Видати спеціальну карту доступів · 30 000 $", MinHeight = 35,
+            var keyButton = new Button { Text = "Видати спеціальну карту доступів — 30 000 $", MinHeight = 35,
                 ToolTip = "Карта працює тільки з корпоративним конфігуратором дверей. Це не посвідчення і не ключ до шатла." };
             keyButton.OnPressed += _ => OutpostToolRequested?.Invoke(org.Id,
                 OrganizationOutpostAccessTier.Member, true);
@@ -1575,9 +1813,23 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
              state.ViewedBody != _previousViewedBody);
         if (_state != null && (_state.FleetRentalPrice != state.FleetRentalPrice ||
             _state.FleetListingName != state.FleetListingName ||
-            _state.FleetBlueprintReady != state.FleetBlueprintReady))
+            _state.FleetBlueprintHash != state.FleetBlueprintHash ||
+            _state.FleetListingApproved != state.FleetListingApproved ||
+            _state.FleetBlueprintReady != state.FleetBlueprintReady ||
+            _state.FleetShuttleIssued != state.FleetShuttleIssued))
+        {
             _fleetRentConfirm = false;
+            _assetsFleetRentConfirm = false;
+        }
         _state = state;
+        if (state.Notice.StartsWith("Перевірено креслення", StringComparison.OrdinalIgnoreCase))
+        {
+            var selectedLeaf = _fleetSelectedBlueprint[(Math.Max(
+                _fleetSelectedBlueprint.LastIndexOf('/'),
+                _fleetSelectedBlueprint.LastIndexOf('\\')) + 1)..];
+            if (string.Equals(state.FleetBlueprintName, selectedLeaf, StringComparison.OrdinalIgnoreCase))
+                _fleetNeedsVerification = false;
+        }
         if (state.Notice.Contains("креслен", StringComparison.OrdinalIgnoreCase) ||
             state.Notice.Contains("аванпост", StringComparison.OrdinalIgnoreCase) ||
             state.Notice.StartsWith("Відхилено", StringComparison.OrdinalIgnoreCase) ||
@@ -1604,12 +1856,22 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             _outpostPurchaseConfirm = false;
             _outpostReplaceConfirm = false;
             _fleetRentConfirm = false;
+            _assetsFleetRentConfirm = false;
             _fleetLocalNotice = string.Empty;
             _hiddenStocks.Clear();
             _selectedStock = null;
             _selectedOrganization = null;
             _personalizationExpanded = false;
-            _outpostOverviewExpanded = true;
+            _descriptionDraftOrganization = null;
+            _descriptionDraft = string.Empty;
+            _descriptionServerValue = string.Empty;
+            _outpostOverviewExpanded = false;
+            _fleetSelectedBlueprint = string.Empty;
+            _fleetNeedsVerification = false;
+            _outpostSelectedBlueprint = string.Empty;
+            _assetsFleetExpanded = false;
+            _assetsAccessExpanded = false;
+            _assetsBranchesInfo = false;
             _developmentExpanded = false;
             _economyExpanded = false;
             _expandedEconomyHelpRows.Clear();
@@ -2200,7 +2462,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 HorizontalExpand = true,
                 MinHeight = 29,
                 MaxHeight = 32,
-                ToolTip = $"{found.Name} · {order.TraderName}"
+                ToolTip = $"{found.Name} — {order.TraderName}"
             };
             var columns = new BoxContainer
             {
@@ -2601,7 +2863,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 var site = string.IsNullOrWhiteSpace(node.SiteCode)
                     ? "історичний запис" : node.SiteCode;
                 AddMetric(networkBody, OrganizationFactionNodeRules.Name(node.Kind),
-                    $"{site} · {node.EstablishedUtc:dd.MM.yyyy} · " +
+                    $"{site} — {node.EstablishedUtc:dd.MM.yyyy} — " +
                     (node.ActiveThisRound ? "антена присутня у цій зміні" : "архів / неактивний"),
                     node.ActiveThisRound ? Color.FromHex("#A4D4B2") : Color.FromHex("#B8C7D5"));
                 if (node.ActiveThisRound && !string.IsNullOrEmpty(node.RoundLocation))
@@ -2609,8 +2871,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             }
             foreach (var finding in _state.FactionFindings)
             {
-                AddMetric(networkBody, "Архів · " + finding.SiteCode,
-                    $"{finding.SiteName} · {finding.RecordedUtc:dd.MM.yyyy}",
+                AddMetric(networkBody, "Архів: " + finding.SiteCode,
+                    $"{finding.SiteName} — {finding.RecordedUtc:dd.MM.yyyy}",
                     Color.FromHex("#AAC7D6"));
             }
             networkBody.AddChild(new Label
@@ -2622,25 +2884,63 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         }
         if (org.Kind == OrganizationKind.Faction)
             _managementBody.AddChild(BuildFactionProgressPanel(org));
-        else if (org.Kind == OrganizationKind.Company)
-            _managementBody.AddChild(BuildOutpostOverviewPanel());
-        // Corporate stations and rental listings live under "Активи".
+        // Corporate outpost ownership and rental controls are exclusive to "Активи".
         if (HasRight(OrganizationPermission.Settings))
         {
             var personal = BuildFoldout("Персоналізація", out var personalBody,
                 _personalizationExpanded, expanded => _personalizationExpanded = expanded);
             var name = new LineEdit { Text = org.Name, PlaceHolder = "Назва організації", HorizontalExpand = true };
             var color = new LineEdit { Text = org.Color, PlaceHolder = "#RRGGBB", HorizontalExpand = true };
+            // Reuse the persisted organization materials URL; it is already shown
+            // in the public organization detail card as "Матеріали організації".
+            var materialsLink = new LineEdit { Text = org.DiscordLink ?? string.Empty,
+                PlaceHolder = "https://...", HorizontalExpand = true };
             var fee = new LineEdit { Text = org.EntryFee.ToString(), PlaceHolder = "Вступний внесок" };
             var isPrivate = new CheckBox { Text = "Приватний вступ", Pressed = org.IsPrivate };
             var publicRoster = new CheckBox { Text = "Відкритий список учасників", Pressed = org.RosterPublic };
             personalBody.AddChild(new Label { Text = "Назва" });
             personalBody.AddChild(name);
+            var serverDescription = org.Description ?? string.Empty;
+            if (_descriptionDraftOrganization != org.Id ||
+                _descriptionServerValue != serverDescription)
+            {
+                _descriptionDraftOrganization = org.Id;
+                _descriptionServerValue = serverDescription;
+                _descriptionDraft = serverDescription;
+            }
+            var editDescription = new TextEdit
+            {
+                TextRope = new Rope.Leaf(_descriptionDraft),
+                MinHeight = 100,
+                HorizontalExpand = true,
+                Placeholder = new Rope.Leaf("Опис компанії або фракції, до 500 символів")
+            };
+            personalBody.AddChild(new Label { Text = "Опис організації" });
+            personalBody.AddChild(editDescription);
+            editDescription.OnTextChanged += _ =>
+                _descriptionDraft = Rope.Collapse(editDescription.TextRope);
+            var saveDescription = new Button { Text = "Зберегти опис", MinHeight = 30 };
+            saveDescription.OnPressed += _ =>
+            {
+                var written = Rope.Collapse(editDescription.TextRope).Trim();
+                if (written.Length <= 500)
+                    UpdateDescriptionRequested?.Invoke(org.Id, written);
+            };
+            personalBody.AddChild(saveDescription);
             personalBody.AddChild(new Label { Text = "Колір" });
             personalBody.AddChild(color);
+            personalBody.AddChild(new Label { Text = "Матеріали організації — HTTPS-посилання" });
+            personalBody.AddChild(materialsLink);
             personalBody.AddChild(new Label { Text = "Вступний внесок" });
             personalBody.AddChild(fee);
             personalBody.AddChild(isPrivate);
+            if (!org.IsPrivate)
+                personalBody.AddChild(new Label
+                {
+                    Text = "Приватний вступ: одноразова оплата 75 000 $ з особистого рахунку власника, " +
+                           "якщо опція ще не була придбана. Повторної оплати немає.",
+                    FontColorOverride = Color.FromHex("#E1BD88")
+                });
             personalBody.AddChild(publicRoster);
             var bannerLine = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
                 SeparationOverride = 10, HorizontalExpand = true };
@@ -2665,9 +2965,21 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             _personalizationBannerStatus = new Label { Text = _personalizationBannerStatusText };
             personalBody.AddChild(_personalizationBannerStatus);
             var savePersonal = new Button { Text = "Зберегти персоналізацію", MinHeight = 34 };
-            savePersonal.OnPressed += _ => ConfigureRequested?.Invoke(org.Id, isPrivate.Pressed,
-                ParseAmount(fee), color.Text, publicRoster.Pressed, name.Text,
-                _newOrganizationBanner, _newOrganizationBanner.Length > 0);
+            var confirmPrivatePurchase = false;
+            savePersonal.OnPressed += _ =>
+            {
+                // Prevent an accidental paid upgrade with a single click.
+                if (isPrivate.Pressed && !org.IsPrivate && !confirmPrivatePurchase)
+                {
+                    confirmPrivatePurchase = true;
+                    savePersonal.Text = "Підтвердити приватний вступ";
+                    return;
+                }
+                ConfigureRequested?.Invoke(org.Id, isPrivate.Pressed,
+                    ParseAmount(fee), color.Text, publicRoster.Pressed, name.Text,
+                    _newOrganizationBanner, _newOrganizationBanner.Length > 0,
+                    materialsLink.Text.Trim());
+            };
             personalBody.AddChild(savePersonal);
             _managementBody.AddChild(personal);
         }
@@ -2825,7 +3137,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                     Text = (selected ? "✓ " : "") + policyTitle,
                     HorizontalExpand = true, MinHeight = 30,
                     Disabled = selected || !HasRight(OrganizationPermission.Strategy),
-                    ToolTip = policyHint + " · Зміна раз на 10 хвилин",
+                    ToolTip = policyHint + ". Змінювати можна раз на 10 хвилин",
                     Modulate = selected ? Color.FromHex("#9CCBA3") : Color.White
                 };
                 strategy.OnPressed += _ => SetOperatingPolicyRequested?.Invoke(org.Id, selectedPolicy);
@@ -2878,15 +3190,15 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 _developmentPage = 1;
             levelBody.AddChild(new Label
             {
-                Text = _developmentPage == 1 ? "I рівень · Базові відділи" :
-                    "II рівень · Розширені відділи",
+                Text = _developmentPage == 1 ? "I рівень: базові відділи" :
+                    "II рівень: розширені відділи",
                 FontColorOverride = Color.FromHex("#C6D8EA")
             });
             if (!advancedAvailable)
                 levelBody.AddChild(new Label
                 {
                     Text = $"II рівень: завершені відділи {fullBranches}/" +
-                        $"{OrganizationDevelopmentRules.CompletedBranchesForAdvanced} · " +
+                        $"{OrganizationDevelopmentRules.CompletedBranchesForAdvanced} — " +
                         $"майстерність {_state.CompanyLevel}/{OrganizationDevelopmentRules.AdvancedMasteryUnlock}",
                     FontColorOverride = Color.FromHex("#9AAAB8")
                 });
@@ -2936,12 +3248,12 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 details.AddChild(heading);
                 details.AddChild(new Label
                 {
-                    Text = maxed ? "Завершено · 5/5" :
-                        $"{facilityLevel}/5 · {price:N0} $ · майстерність {masteryRequired} · вплив {sectorRequired / 100.0:0.00}%"
+                    Text = maxed ? "Завершено (5/5)" :
+                        $"{facilityLevel}/5 — {price:N0} $ — майстерність {masteryRequired} — вплив {sectorRequired / 100.0:0.00}%"
                 });
                 details.AddChild(new Label
                 {
-                    Text = description + " · " + DevelopmentBenefit(branch, firstLevel + secondLevel),
+                    Text = description + " — " + DevelopmentBenefit(branch, firstLevel + secondLevel),
                     FontColorOverride = Color.FromHex("#9AAAB8")
                 });
                 row.AddChild(details);
@@ -3422,6 +3734,36 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     private bool HasRight(OrganizationPermission permission) =>
         _state != null && (_state.UserPermissions & permission) == permission;
 
+    private static string AccessRoleKey(OrganizationPermissionTier tier, Guid customId) =>
+        customId != Guid.Empty ? $"custom:{customId:D}" : tier switch
+        {
+            OrganizationPermissionTier.Owner => "owner",
+            OrganizationPermissionTier.Deputy => "deputy",
+            OrganizationPermissionTier.Officer => "officer",
+            _ => "member"
+        };
+
+    private int GetRoleAccessMask(string roleKey) =>
+        _state?.RoleAccessGrants.FirstOrDefault(g => g.RoleKey == roleKey)?.AccessMask ?? 0;
+
+    // Show only real role definitions. Officer is a legacy internal role and
+    // should not appear unless at least one member actually occupies it.
+    private List<(string Key, string Title)> BuildAccessRoleEntries()
+    {
+        var result = new List<(string Key, string Title)>();
+        if (_state == null)
+            return result;
+        result.Add(("owner", _state.OwnerTitle));
+        // The deputy role exists even when no employee occupies the position.
+        // Keep the legacy officer role hidden unless it is actually assigned.
+        result.Add(("deputy", _state.DeputyTitle));
+        if (_state.Members.Any(m => m.Role == OrganizationMemberRole.Officer && !m.IsDeputy))
+            result.Add(("officer", _state.OfficerTitle));
+        result.Add(("member", _state.MemberTitle));
+        result.AddRange(_state.CustomRoles.Select(c => ($"custom:{c.Id:D}", c.Title)));
+        return result;
+    }
+
     private void RefreshPermissions()
     {
         Clear(_permissionsBody);
@@ -3473,13 +3815,13 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             (OrganizationPermissionTier.Deputy, _state.DeputyTitle, _state.DeputyPermissions),
             (OrganizationPermissionTier.Member, _state.MemberTitle, _state.MemberPermissions)
         })
-            AddRoleEditor(roles, _state.Membership.Value, slot, Guid.Empty, title, rights, canEdit);
+            AddRoleEditor(roles, _state.Membership.Value, slot, Guid.Empty, title, rights, canEdit, false, false, GetRoleAccessMask(AccessRoleKey(slot, Guid.Empty)));
         foreach (var custom in _state.CustomRoles)
             AddRoleEditor(roles, _state.Membership.Value, OrganizationPermissionTier.Member,
-                custom.Id, custom.Title, custom.Permissions, canEdit);
+                custom.Id, custom.Title, custom.Permissions, canEdit, false, false, GetRoleAccessMask(AccessRoleKey(OrganizationPermissionTier.Member, custom.Id)));
         if (canEdit && _state.CustomRoles.Length < 12)
             AddRoleEditor(roles, _state.Membership.Value, OrganizationPermissionTier.Member,
-                Guid.Empty, "Нова посада", OrganizationPermission.None, true, true);
+                Guid.Empty, "Нова посада", OrganizationPermission.None, true, true, false, 0);
         _personnelRightsBody.AddChild(panel);
     }
 
@@ -3488,18 +3830,19 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         if (_state == null)
             return;
         var owner = _state.Ownership == membership && !_state.ViewingAnotherCharacter;
-        var fleetPanel = BuildFoldout("Шатл для оренди", out var fleetBody,
+        Button? activeFleetRentalButton = null;
+        var fleetPanel = BuildFoldout("Шатли для оренди", out var fleetBody,
             _assetsFleetExpanded, expanded => _assetsFleetExpanded = expanded);
         fleetBody.AddChild(new Label { Text = WrapText(
-            "Оренда корпоративного транспорту: завантажте підписане креслення, задайте назву, короткий опис і вартість. Перед публікацією перевірте великий грід на верфі.", 45),
+            "Оренда корпоративного транспорту. Власник завантажує підписане креслення та встановлює умови; орендар вставляє особисту ID-картку організації й оплачує фізичну видачу шатла на раунд.", 45),
             FontColorOverride = Color.FromHex("#9EB6C9") });
         var fleetStatus = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
             HorizontalExpand = true, SeparationOverride = 5 };
         foreach (var step in new[]
         {
-            ("01 · Креслення", _state.FleetBlueprintReady),
-            ("02 · Оголошення", !string.IsNullOrWhiteSpace(_state.FleetListingName)),
-            ("03 · Оренда", _state.FleetShuttleIssued)
+            ("01. Креслення", _state.FleetBlueprintReady),
+            ("02. Параметри", !string.IsNullOrWhiteSpace(_state.FleetListingName)),
+            ("03. Затвердження", _state.FleetListingApproved)
         })
             fleetStatus.AddChild(new PanelContainer { HorizontalExpand = true,
                 PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex(
@@ -3510,14 +3853,41 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                     FontColorOverride = Color.FromHex(step.Item2 ? "#C5E5D5" : "#A8B5C5") } }
             });
         fleetBody.AddChild(fleetStatus);
+        var idSlotButton = new Button
+        {
+            Text = "Вставити / вийняти ID-картку для оренди",
+            MinHeight = 30,
+            ToolTip = "Вставте свою корпоративну ID-картку. Після видачі орендований шатл буде записаний на цю картку, як у Shipyard."
+        };
+        idSlotButton.OnPressed += _ => LeaseIdSlotRequested?.Invoke();
+        fleetBody.AddChild(idSlotButton);
         AddMetric(fleetBody, "Креслення", string.IsNullOrEmpty(_state.FleetBlueprintName)
             ? "Не зареєстроване" : _state.FleetBlueprintName);
+        if (!string.IsNullOrEmpty(_state.FleetBlueprintHash))
+            AddMetric(fleetBody, "Контрольний хеш креслення", _state.FleetBlueprintHash[..Math.Min(12, _state.FleetBlueprintHash.Length)]);
+        AddMetric(fleetBody, "Затвердження", _state.FleetListingApproved
+            ? "Затверджено для цього креслення" : "Потрібно затвердити вибране креслення та умови");
         AddMetric(fleetBody, "Назва для оренди", string.IsNullOrEmpty(_state.FleetListingName)
             ? "Немає" : _state.FleetListingName);
         AddMetric(fleetBody, "Ціна на раунд", $"{_state.FleetRentalPrice:N0} $");
         AddMetric(fleetBody, "Стан", _state.FleetShuttleIssued
-            ? _state.FleetShuttlePresent ? "Виданий" : "Закритий на цей раунд"
-            : _state.FleetBlueprintReady ? "Можна взяти в оренду" : "Потрібне креслення");
+            ? _state.FleetShuttlePresent ? "Виданий" : _state.FleetShuttleReturned
+                ? "Повернуто" : "Втрачено"
+            : _state.FleetListingApproved && _state.FleetBlueprintReady
+                ? "Доступний для оренди" : "Очікує затвердження");
+        if (_state.FleetShuttleIssued)
+        {
+            AddMetric(fleetBody, "Орендар", string.IsNullOrWhiteSpace(_state.FleetRenterName)
+                ? "Невідомий" : _state.FleetRenterName);
+            AddMetric(fleetBody, "Шатл", string.IsNullOrWhiteSpace(_state.FleetIssuedName)
+                ? "Немає" : _state.FleetIssuedName);
+        }
+        if (!string.IsNullOrWhiteSpace(_fleetLocalNotice))
+            fleetBody.AddChild(new Label { Text = WrapText(_fleetLocalNotice, 42),
+                FontColorOverride = Color.FromHex("#B6D1EA") });
+        if (!string.IsNullOrWhiteSpace(_state.FleetError))
+            fleetBody.AddChild(new Label { Text = WrapText(_state.FleetError, 42),
+                FontColorOverride = Color.FromHex("#E6A5A5") });
         if (!string.IsNullOrEmpty(_state.FleetListingDescription))
             fleetBody.AddChild(new Label { Text = WrapText(_state.FleetListingDescription, 42),
                 FontColorOverride = Color.FromHex("#BBCBDA") });
@@ -3525,6 +3895,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         {
             if (!_state.FleetShuttleIssued)
             {
+                // The approval button is defined after the selector. Keep it in
+                // sync with the CURRENT selection, not the initially rendered row.
+                Button? approveFleetButton = null;
                 var fleetFiles = GetOutpostBlueprintFiles?.Invoke() ?? [];
                 if (fleetFiles.Length > 0)
                 {
@@ -3532,16 +3905,73 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                     for (var i = 0; i < fleetFiles.Length; i++)
                     {
                         var name = fleetFiles[i];
-                        selector.AddItem(name[(name.LastIndexOf('/') + 1)..], i);
+                        var slash = Math.Max(name.LastIndexOf('/'), name.LastIndexOf('\\'));
+                        selector.AddItem(name[(slash + 1)..], i);
                     }
-                    selector.SelectId(0);
+                    var selected = Array.IndexOf(fleetFiles, _fleetSelectedBlueprint);
+                    if (selected < 0)
+                        selected = Array.FindIndex(fleetFiles, path =>
+                        {
+                            var slash = Math.Max(path.LastIndexOf('/'), path.LastIndexOf('\\'));
+                            return string.Equals(path[(slash + 1)..], _state.FleetBlueprintName,
+                                StringComparison.OrdinalIgnoreCase);
+                        });
+                    if (selected < 0) selected = 0;
+                    _fleetSelectedBlueprint = fleetFiles[selected];
+                    var selectedIndex = selected;
+                    selector.SelectId(selected);
+                    var initialFile = fleetFiles[selected];
+                    var initialSlash = Math.Max(initialFile.LastIndexOf('/'), initialFile.LastIndexOf('\\'));
+                    var selectedFileLabel = new Label
+                    {
+                        Text = $"Вибране креслення: {initialFile[(initialSlash + 1)..]}",
+                        FontColorOverride = Color.FromHex("#AFC0D0")
+                    };
+                    selector.OnItemSelected += args =>
+                    {
+                        if (args.Id < 0 || args.Id >= fleetFiles.Length) return;
+                        selectedIndex = args.Id;
+                        _fleetSelectedBlueprint = fleetFiles[selectedIndex];
+                        var file = fleetFiles[args.Id];
+                        var slash = Math.Max(file.LastIndexOf('/'), file.LastIndexOf('\\'));
+                        _fleetNeedsVerification = !string.Equals(_state.FleetBlueprintName,
+                            file[(slash + 1)..], StringComparison.OrdinalIgnoreCase);
+                        if (approveFleetButton != null)
+                            approveFleetButton.Disabled = !_state.FleetBlueprintReady || _fleetNeedsVerification;
+                        if (activeFleetRentalButton != null && owner)
+                            activeFleetRentalButton.Disabled = _fleetNeedsVerification ||
+                                _state.ViewingAnotherCharacter || _state.TdfOnDuty;
+                        selectedFileLabel.Text = $"Вибране креслення: {file[(slash + 1)..]}";
+                    };
+                    fleetBody.AddChild(new Label { Text = $"Збережені шатли: {fleetFiles.Length}",
+                        FontColorOverride = Color.FromHex("#AFC0D0") });
                     fleetBody.AddChild(selector);
-                    var register = new Button { Text = "Поставити креслення шатла на оренду", MinHeight = 33 };
+                    fleetBody.AddChild(selectedFileLabel);
+                    fleetBody.AddChild(new Label
+                    {
+                        Text = "1. Виберіть файл і поставте креслення на перевірку. Потім дочекайтеся серверного підтвердження й натисніть «Затвердити».",
+                        FontColorOverride = Color.FromHex("#AFC0D0")
+                    });
+                    var register = new Button { Text = "Поставити вибране креслення на перевірку", MinHeight = 33 };
                     register.OnPressed += _ =>
                     {
-                        var selected = selector.SelectedId;
-                        if (selected >= 0 && selected < fleetFiles.Length)
-                            FleetBlueprintRequested?.Invoke(membership, fleetFiles[selected]);
+                        // Read the live dropdown selection rather than a cached value.
+                        // A refreshed UI must not accidentally submit the first ship.
+                        // The event's explicit selected ID is authoritative.
+                        // Reading OptionButton.SelectedId here could keep the first
+                        // item after a nested menu refresh, despite the user's choice.
+                        if (selectedIndex < 0 || selectedIndex >= fleetFiles.Length)
+                            return;
+                        var selectedFile = fleetFiles[selectedIndex];
+                        _fleetSelectedBlueprint = selectedFile;
+                        _fleetNeedsVerification = true;
+                        if (approveFleetButton != null)
+                            approveFleetButton.Disabled = true;
+                        if (activeFleetRentalButton != null && owner)
+                            activeFleetRentalButton.Disabled = true;
+                        register.Disabled = true;
+                        _fleetLocalNotice = $"Перевіряється файл: {selectedFile[(Math.Max(selectedFile.LastIndexOf('/'), selectedFile.LastIndexOf('\\')) + 1)..]}";
+                        FleetBlueprintRequested?.Invoke(membership, selectedFile);
                     };
                     fleetBody.AddChild(register);
                 }
@@ -3554,20 +3984,133 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 fleetBody.AddChild(publicName);
                 fleetBody.AddChild(description);
                 fleetBody.AddChild(price);
-                var save = new Button { Text = "Затвердити умови оренди", MinHeight = 34 };
+                var actionRow = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
+                    HorizontalExpand = true, SeparationOverride = 8 };
+                actionRow.AddChild(new Control { HorizontalExpand = true });
+                var erase = new Button { Text = "Стерти", MinHeight = 29, MinWidth = 88,
+                    Modulate = Color.FromHex("#DC7777"),
+                    ToolTip = "Стерти опубліковані умови оренди. Креслення залишиться збереженим." };
+                // Destructive operation is explicit and server-authorized.
+                var eraseConfirmed = false;
+                erase.OnPressed += _ =>
+                {
+                    if (!eraseConfirmed)
+                    {
+                        eraseConfirmed = true;
+                        erase.Text = "Стерти?";
+                        return;
+                    }
+                    erase.Disabled = true;
+                    FleetClearListingRequested?.Invoke(membership);
+                };
+                actionRow.AddChild(erase);
+                var save = new Button { Text = "Затвердити креслення й умови", MinHeight = 29,
+                    MinWidth = 100, Modulate = Color.FromHex("#70BE8D"),
+                    Disabled = !_state.FleetBlueprintReady || _fleetNeedsVerification ||
+                        (fleetFiles.Length > 0 &&
+                         !string.Equals(_state.FleetBlueprintName,
+                             _fleetSelectedBlueprint[(Math.Max(_fleetSelectedBlueprint.LastIndexOf('/'),
+                                 _fleetSelectedBlueprint.LastIndexOf('\\')) + 1)..], StringComparison.OrdinalIgnoreCase)),
+                    ToolTip = "Спочатку перевірте вибране креслення на сервері. Затвердження прив'язується до хешу перевіреного файла." };
+                approveFleetButton = save;
                 save.OnPressed += _ =>
                 {
+                    if (_fleetNeedsVerification || !_state.FleetBlueprintReady ||
+                        (fleetFiles.Length > 0 &&
+                         !string.Equals(_state.FleetBlueprintName,
+                             _fleetSelectedBlueprint[(Math.Max(_fleetSelectedBlueprint.LastIndexOf('/'),
+                                 _fleetSelectedBlueprint.LastIndexOf('\\')) + 1)..], StringComparison.OrdinalIgnoreCase)))
+                        return;
                     if (int.TryParse(price.Text.Trim(), out var amount) &&
                         amount is >= OrganizationFleetRules.MinimumRentalPrice
                             and <= OrganizationFleetRules.MaximumRentalPrice)
                         FleetListingRequested?.Invoke(membership, publicName.Text, description.Text, amount);
                 };
-                fleetBody.AddChild(save);
+                actionRow.AddChild(save);
+                fleetBody.AddChild(actionRow);
             }
             else
                 fleetBody.AddChild(new Label { Text = "Змінити умови можна з наступного раунду." });
         }
+
+        // Rental and return are intentionally below the entire listing, not
+        // hidden in the owner's blueprint editor. Regular company members can
+        // use this action with their own ID; the server verifies identity,
+        // active quota, personal funds and the one-rental-per-round limit.
+        if (_state.FleetShuttleIssued)
+        {
+            if (_state.FleetShuttlePresent && _state.FleetRenterIsMe)
+            {
+                var returnFleet = new Button { Text = "Відмовитися від оренди",
+                    MinHeight = 34, HorizontalExpand = true,
+                    Modulate = Color.FromHex("#DB8780"),
+                    ToolTip = "Повернення без відшкодування оплати. Усі гравці мають залишити шатл; повторна оренда в цьому раунді неможлива." };
+                var confirmReturn = false;
+                returnFleet.OnPressed += _ =>
+                {
+                    if (!confirmReturn)
+                    {
+                        confirmReturn = true;
+                        returnFleet.Text = "Підтвердити відмову від оренди?";
+                        return;
+                    }
+                    returnFleet.Disabled = true;
+                    FleetReturnRequested?.Invoke(membership);
+                };
+                fleetBody.AddChild(returnFleet);
+            }
+            else
+                fleetBody.AddChild(new Label { Text = _state.FleetShuttlePresent
+                        ? "Повернути оренду може лише орендар, на якого зареєстровано шатл."
+                        : "Повторно орендувати цей шатл можна лише в наступному раунді.",
+                    FontColorOverride = Color.FromHex("#A8B8C7") });
+        }
+        else if (_state.FleetBlueprintReady && _state.FleetListingApproved &&
+                 (!owner || !_fleetNeedsVerification))
+        {
+            var rentFleet = new Button
+            {
+                Text = _assetsFleetRentConfirm
+                    ? $"Підтвердити оренду за {_state.FleetRentalPrice:N0} $?"
+                    : $"Орендувати за {_state.FleetRentalPrice:N0} $",
+                Modulate = Color.FromHex("#D6B75F"),
+                HorizontalExpand = true,
+                MinHeight = 35,
+                Disabled = _state.ViewingAnotherCharacter || _state.TdfOnDuty,
+                ToolTip = "Оплата з особистого рахунку. Перед підтвердженням вставте власну корпоративну ID-картку."
+            };
+            activeFleetRentalButton = rentFleet;
+            rentFleet.OnPressed += _ =>
+            {
+                if (owner && _fleetNeedsVerification)
+                {
+                    SetFleetLocalNotice("Спершу дочекайтеся перевірки вибраного креслення й затвердьте його. Стара модель шатла не видаватиметься.");
+                    return;
+                }
+                if (!_assetsFleetRentConfirm)
+                {
+                    _assetsFleetRentConfirm = true;
+                    rentFleet.Text = $"Підтвердити оренду за {_state.FleetRentalPrice:N0} $?";
+                    return;
+                }
+                _assetsFleetRentConfirm = false;
+                rentFleet.Disabled = true;
+                FleetRentRequested?.Invoke(membership);
+            };
+            fleetBody.AddChild(rentFleet);
+        }
+        else
+        {
+            fleetBody.AddChild(new Label
+            {
+                Text = _fleetNeedsVerification && owner
+                    ? "Вибране нове креслення ще не перевірене сервером. Старий шатл орендувати не можна — перевірте файл і затвердьте умови."
+                    : "Оренда з'явиться після серверної перевірки креслення та натискання кнопки «Затвердити креслення й умови».",
+                FontColorOverride = Color.FromHex("#AFC0D0")
+            });
+        }
         _permissionsBody.AddChild(fleetPanel);
+        _permissionsBody.AddChild(BuildAccessAssetsPanel(membership, owner));
 
         var branches = new PanelContainer { HorizontalExpand = true,
             PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex("#222830") } };
@@ -3605,6 +4148,207 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         _permissionsBody.AddChild(BuildOutpostOverviewPanel());
     }
 
+    private PanelContainer BuildAccessAssetsPanel(Guid membership, bool owner)
+    {
+        var panel = BuildFoldout("Доступи", out var body, _assetsAccessExpanded,
+            expanded => _assetsAccessExpanded = expanded);
+        body.SeparationOverride = 5;
+        body.AddChild(new Label { Text = WrapText(
+            "Корпоративні доступи для захисту дверей, шатлів та аванпостів.", 48),
+            FontColorOverride = Color.FromHex("#AFC0D0") });
+
+        var owned = _state?.AccessProfiles.Length ?? 0;
+        var nextOpenSlot = Enumerable.Range(1, OrganizationAccessPricing.MaxSlots)
+            .FirstOrDefault(candidate => _state?.AccessProfiles.All(a => a.Slot != candidate) ?? true);
+        var nextPrice = OrganizationAccessPricing.NextSlotPrice(nextOpenSlot - 1);
+        body.AddChild(new Label
+        {
+            Text = owned >= OrganizationAccessPricing.MaxSlots
+                ? $"Придбано {owned}/{OrganizationAccessPricing.MaxSlots}. Усі доступи відкрито."
+                : $"Придбано {owned}/{OrganizationAccessPricing.MaxSlots}. Наступний доступ: {nextPrice:N0} $",
+            FontColorOverride = Color.FromHex("#D4E5EF")
+        });
+        body.AddChild(new Label
+        {
+            Text = $"Скарбниця: {_state?.Treasury ?? 0:N0} $",
+            FontColorOverride = Color.FromHex("#AFC0D0")
+        });
+
+        for (var slot = 1; slot <= OrganizationAccessPricing.MaxSlots; slot++)
+        {
+            // Capture a stable value for delayed button callbacks.
+            var currentSlot = slot;
+            var entry = _state?.AccessProfiles.FirstOrDefault(a => a.Slot == currentSlot);
+            var card = new PanelContainer
+            {
+                HorizontalExpand = true,
+                PanelOverride = new StyleBoxFlat
+                {
+                    BackgroundColor = Color.FromHex(entry == null ? "#262C34" : "#283641"),
+                    BorderColor = Color.FromHex(entry == null ? "#4A5664" : "#66859C"),
+                    BorderThickness = new Thickness(1)
+                }
+            };
+            var content = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Vertical,
+                HorizontalExpand = true,
+                SeparationOverride = 4,
+                Margin = new Thickness(8, 5)
+            };
+            card.AddChild(content);
+            body.AddChild(card);
+
+            if (entry == null)
+            {
+                var purchaseRow = new BoxContainer
+                {
+                    Orientation = LayoutOrientation.Horizontal,
+                    HorizontalExpand = true,
+                    SeparationOverride = 9
+                };
+                purchaseRow.AddChild(new Label
+                {
+                    Text = $"Слот №{currentSlot}: не придбано",
+                    HorizontalExpand = true,
+                    MinHeight = 28,
+                    FontColorOverride = Color.FromHex("#BED0DE")
+                });
+                if (owner)
+                {
+                    var buy = new Button
+                    {
+                        Text = currentSlot == nextOpenSlot ? $"Придбати за {nextPrice:N0} $" : "Заблоковано",
+                        MinWidth = 146,
+                        MinHeight = 31,
+                        Disabled = currentSlot != nextOpenSlot || _state == null ||
+                            _state.Treasury < nextPrice || nextPrice <= 0,
+                        ToolTip = currentSlot == nextOpenSlot
+                            ? "Купівля списує кошти зі скарбниці організації."
+                            : $"Спочатку придбайте доступ №{currentSlot - 1}."
+                    };
+                    buy.OnPressed += _ => PurchaseAccessSlotRequested?.Invoke(membership, currentSlot);
+                    purchaseRow.AddChild(buy);
+                }
+                content.AddChild(purchaseRow);
+                continue;
+            }
+
+            content.AddChild(new Label
+            {
+                Text = $"Слот №{currentSlot}: придбано",
+                FontColorOverride = Color.FromHex("#C6E7D6")
+            });
+            var nameRow = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Horizontal,
+                HorizontalExpand = true,
+                SeparationOverride = 8
+            };
+            var name = new LineEdit
+            {
+                Text = entry.Title,
+                HorizontalExpand = true,
+                MinHeight = 30,
+                PlaceHolder = "Назва корпоративного доступу"
+            };
+            nameRow.AddChild(name);
+            if (owner)
+            {
+                var save = new Button { Text = "Зберегти назву", MinWidth = 122, MinHeight = 30 };
+                save.OnPressed += _ => RenameAccessSlotRequested?.Invoke(membership, currentSlot, name.Text);
+                nameRow.AddChild(save);
+            }
+            content.AddChild(nameRow);
+
+            // A compact toggle reveals a checklist instead of the native
+            // single-choice OptionButton. Selection is saved atomically.
+            var selectedRoles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var roleEntries = new List<(string Key, string Title)>();
+            var choices = BuildAccessRoleEntries();
+            foreach (var (key, title) in choices)
+            {
+                roleEntries.Add((key, title));
+                if ((GetRoleAccessMask(key) & (1 << (currentSlot - 1))) != 0 || key == "owner")
+                    selectedRoles.Add(key);
+            }
+
+            var chooser = new Button
+            {
+                Text = $"Власники доступу: {selectedRoles.Count} обрано  ▾",
+                HorizontalExpand = true,
+                MinHeight = 31
+            };
+            content.AddChild(chooser);
+            var chooserPanel = new PanelContainer
+            {
+                HorizontalExpand = true,
+                Visible = false,
+                PanelOverride = new StyleBoxFlat
+                {
+                    BackgroundColor = Color.FromHex("#202933"),
+                    BorderColor = Color.FromHex("#526778"),
+                    BorderThickness = new Thickness(1)
+                }
+            };
+            var checklist = new BoxContainer
+            {
+                Orientation = LayoutOrientation.Vertical,
+                HorizontalExpand = true,
+                SeparationOverride = 3,
+                Margin = new Thickness(8, 5)
+            };
+            chooserPanel.AddChild(checklist);
+            content.AddChild(chooserPanel);
+            chooser.OnPressed += _ => chooserPanel.Visible = !chooserPanel.Visible;
+            foreach (var (key, title) in roleEntries)
+            {
+                var roleKey = key;
+                var check = new CheckBox
+                {
+                    Text = title,
+                    Pressed = selectedRoles.Contains(roleKey),
+                    Disabled = !owner || roleKey == "owner",
+                    MinHeight = 26
+                };
+                check.OnToggled += args =>
+                {
+                    if (args.Pressed) selectedRoles.Add(roleKey);
+                    else selectedRoles.Remove(roleKey);
+                    chooser.Text = $"Власники доступу: {selectedRoles.Count} обрано  ▾";
+                };
+                checklist.AddChild(check);
+            }
+            if (owner)
+            {
+                var saveOwners = new Button { Text = "Зберегти власників доступу", MinHeight = 30 };
+                saveOwners.OnPressed += _ =>
+                {
+                    selectedRoles.Add("owner");
+                    SetAccessSlotRolesRequested?.Invoke(membership, currentSlot, selectedRoles.ToArray());
+                    chooserPanel.Visible = false;
+                };
+                checklist.AddChild(saveOwners);
+            }
+
+
+        }
+        // Issuance is a single action at the bottom. The server derives the
+        // caller's actual job and full permitted mask; no client-chosen role.
+        var printButton = new Button
+        {
+            Text = $"Видати свою ID-картку: {OrganizationAccessPricing.PrintedCardPrice:N0} $",
+            HorizontalExpand = true,
+            MinHeight = 33,
+            Disabled = _state == null || _state.Treasury < OrganizationAccessPricing.PrintedCardPrice ||
+                owned == 0 || _state.ViewingAnotherCharacter,
+            ToolTip = "Доступи на картці визначаються вашою посадою. Власник отримує всі придбані доступи."
+        };
+        printButton.OnPressed += _ => PrintAccessCardRequested?.Invoke(membership, "self", 0);
+        body.AddChild(printButton);
+        return panel;
+    }
+
     private void RefreshAssetsInPlace(Guid membership)
     {
         Clear(_permissionsBody);
@@ -3612,7 +4356,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     }
 
     private void AddRoleEditor(BoxContainer container, Guid org, OrganizationPermissionTier tier,
-        Guid customId, string title, OrganizationPermission current, bool canEdit, bool newRole = false, bool expanded = false)
+        Guid customId, string title, OrganizationPermission current, bool canEdit, bool newRole = false, bool expanded = false, int initialAccessMask = 0)
     {
         var header = BuildFoldout(title, out var body, expanded: expanded);
         container.AddChild(header);
@@ -3648,6 +4392,27 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             };
             body.AddChild(check);
         }
+        var roleAccessMask = initialAccessMask;
+        if (_state?.AccessProfiles.Length > 0)
+        {
+            body.AddChild(new Label { Text = "Доступи фракції", FontColorOverride = Color.FromHex("#C9D6E4") });
+            foreach (var access in _state.AccessProfiles.OrderBy(a => a.Slot))
+            {
+                var bit = 1 << (access.Slot - 1);
+                var check = new CheckBox
+                {
+                    Text = $"{access.Title} (слот {access.Slot})",
+                    Pressed = (roleAccessMask & bit) != 0,
+                    Disabled = !canEdit
+                };
+                check.OnToggled += args =>
+                {
+                    if (args.Pressed) roleAccessMask |= bit;
+                    else roleAccessMask &= ~bit;
+                };
+                body.AddChild(check);
+            }
+        }
         if (!readOnly)
         {
             var save = new Button { Text = newRole ? "Створити посаду" : "Зберегти", MinHeight = 32 };
@@ -3657,6 +4422,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                     SetPermissionsRequested?.Invoke(org, tier, selected);
                 else
                     SaveCustomRoleRequested?.Invoke(org, customId, customName?.Text ?? "", selected);
+                if (!newRole)
+                    SetRoleAccessMaskRequested?.Invoke(org, AccessRoleKey(tier, customId), roleAccessMask);
             };
             body.AddChild(save);
         }

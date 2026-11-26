@@ -10,7 +10,7 @@
   category: Medium
   group: Security
   access: Security
-  shuttlePath: /Maps/_Mono/Shuttles/Nfsd/Infernal.yml
+  shuttlePath: /SharedMaps/_Mono/Shuttles/Nfsd/Infernal.yml
   guidebookPage: null
   class:
   - Frigate
@@ -20,7 +20,7 @@
 - type: gameMap
   id: Infernal
   mapName: 'Infernal'
-  mapPath: /Maps/_Mono/Shuttles/Nfsd/Infernal.yml
+  mapPath: /SharedMaps/_Mono/Shuttles/Nfsd/Infernal.yml
   minPlayers: 0
   stations:
     Infernal:
@@ -36,5 +36,4 @@
           prefixCreator: '14'
       - type: StationJobs
         availableJobs:
-          Deputy: [ 0, 0 ]
           TsfBorg: [ 0, 0 ]
