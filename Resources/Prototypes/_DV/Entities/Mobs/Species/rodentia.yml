@@ -86,6 +86,8 @@
         sprite: "_DV/Effects/creampie.rsi"
         state: "creampie_rodentia"
         visible: false
+      - map: [ "plasmaburn" ] # Triad - plasma burn
+        shader: unshaded
   - type: MeleeWeapon
     soundHit:
       path: /Audio/Weapons/pierce.ogg
@@ -115,6 +117,7 @@
     understands:
     - TauCetiBasic
     - Mouse # There was no other language for them. This is how it used to be before EE removed them.
+    naturalLanguage: Mouse
   - type: Rummager
   - type: AlwaysTriggerMousetrap
   - type: PseudoItem

@@ -68,6 +68,7 @@
     understands:
     - TauCetiBasic
     - Canilunzt
+    naturalLanguage: Canilunzt
   - type: Sprite
     netsync: false
     noRot: true
@@ -128,6 +129,8 @@
         sprite: "_DV/Effects/creampie.rsi"
         state: "creampie_vulpkanin"
         visible: false
+      - map: [ "plasmaburn" ] # Triad - plasma burn
+        shader: unshaded
   - type: MeleeWeapon
     hidden: true
     soundHit:
