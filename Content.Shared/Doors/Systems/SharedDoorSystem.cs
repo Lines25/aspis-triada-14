@@ -344,7 +344,11 @@ public abstract partial class SharedDoorSystem : EntitySystem
         if (!CanOpen(uid, door, user, quiet))
             return false;
 
-        StartOpening(uid, door, user, predicted);
+        // Corporate doors are not predicted on the client, so the server must
+        // also send the opening sound to the interacting player.
+        var corporate = HasComp<OrganizationPropertyAccessReaderComponent>(uid) ||
+                        HasComp<OrganizationOutpostDoorComponent>(uid);
+        StartOpening(uid, door, user, predicted && !corporate);
 
         return true;
     }
