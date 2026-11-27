@@ -11,7 +11,13 @@ namespace Content.Shared._Aspis.Organizations;
 [RegisterComponent, NetworkedComponent]
 public sealed partial class OrganizationPropertyAccessReaderComponent : Component
 {
-    public Guid Organization;
+    // Guid is not a supported YAML data field in this build. Persist its canonical text.
+    [DataField("organization")] public string OrganizationKey = string.Empty;
+    public Guid Organization
+    {
+        get => Guid.TryParse(OrganizationKey, out var id) ? id : Guid.Empty;
+        set => OrganizationKey = value == Guid.Empty ? string.Empty : value.ToString("D");
+    }
     [DataField] public int RequiredSlot = 1;
 }
 

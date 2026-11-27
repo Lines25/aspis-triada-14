@@ -3398,12 +3398,13 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             investmentsBody.AddChild(new Label { Text = "Програма, яку фінансуємо" });
             investmentsBody.AddChild(new Label
             {
-                Text = "Кошти спрямовуються на обраний напрям розвитку ринку. Для постійних покращень відділів відкрийте «Огляд → Прогрес компанії».",
+                Text = WrapText("Кошти спрямовуються на обраний напрям розвитку ринку. Для постійних покращень відділів відкрийте «Огляд → Прогрес компанії».", 40),
                 FontColorOverride = Color.FromHex("#98ADBE")
             });
             investmentsBody.AddChild(focus);
 
-            var money = new LineEdit { Text = "5000", PlaceHolder = "Бюджет інвестиції, $" };
+            investmentsBody.AddChild(new Label { Text = WrapText("Від 50 000 $ за 0,01% секторного або від 20 000 $ за 0,01% галузевого впливу. Ціна зростає з часткою ринку. Ліміт — наявні кошти скарбниці.", 40) });
+            var money = new LineEdit { Text = "100000", PlaceHolder = "Бюджет інвестиції, $" };
             investmentsBody.AddChild(money);
             var invest = new Button { Text = "Інвестувати зі скарбниці", MinHeight = 34 };
             invest.OnPressed += _ =>
@@ -4060,9 +4061,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 fleetBody.AddChild(returnFleet);
             }
             else
-                fleetBody.AddChild(new Label { Text = _state.FleetShuttlePresent
+                fleetBody.AddChild(new Label { Text = WrapText(_state.FleetShuttlePresent
                         ? "Повернути оренду може лише орендар, на якого зареєстровано шатл."
-                        : "Повторно орендувати цей шатл можна лише в наступному раунді.",
+                        : "Повторно орендувати цей шатл можна лише в наступному раунді.", 40),
                     FontColorOverride = Color.FromHex("#A8B8C7") });
         }
         else if (_state.FleetBlueprintReady && _state.FleetListingApproved &&

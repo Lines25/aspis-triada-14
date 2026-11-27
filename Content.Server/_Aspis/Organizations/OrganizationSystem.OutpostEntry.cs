@@ -74,7 +74,7 @@ public sealed partial class OrganizationSystem
         // Corporate access is an extra, authoritative server-only door gate.
         // The stock AccessReader has no per-company tag namespace.
         if (args.User is not { } user ||
-            !_organizations.TryGetValue(reader.Organization, out var org) ||
+            !IsOnOwnedProperty(uid, reader.Organization) ||
             !HasAnyMatchingCorporatePermission(user, uid, reader))
             args.Cancel();
     }
@@ -639,6 +639,7 @@ public sealed partial class OrganizationSystem
         // The signed blueprint is a structural snapshot, NOT an authority
         // source for which company currently owns it. Rebind saved corporate
         // access settings to the active owner at every deployment.
+        RestoreSavedCorporateReaders(orgId, grid);
         var invalidDoors = new List<EntityUid>();
         var doors = EntityQueryEnumerator<OrganizationOutpostDoorComponent, TransformComponent>();
         while (doors.MoveNext(out var uid, out var door, out var xform))
@@ -655,7 +656,9 @@ public sealed partial class OrganizationSystem
                 continue;
             }
 
-            door.Organization = orgId;
+            // A signed template cannot claim another organization's identity.
+            door.Organization = door.Organization == Guid.Empty || door.Organization == orgId
+                ? orgId : Guid.Empty;
             Dirty(uid, door);
         }
         // Modifying the component store during EntityQueryEnumerator iteration

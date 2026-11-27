@@ -19,7 +19,12 @@ public enum OrganizationOutpostAccessTier : byte
 [RegisterComponent, NetworkedComponent]
 public sealed partial class OrganizationOutpostDoorComponent : Component
 {
-    public Guid Organization;
+    [DataField("organization")] public string OrganizationKey = string.Empty;
+    public Guid Organization
+    {
+        get => Guid.TryParse(OrganizationKey, out var id) ? id : Guid.Empty;
+        set => OrganizationKey = value == Guid.Empty ? string.Empty : value.ToString("D");
+    }
     [DataField] public OrganizationOutpostAccessTier RequiredTier = OrganizationOutpostAccessTier.Member;
 }
 

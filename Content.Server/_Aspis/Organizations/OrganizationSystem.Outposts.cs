@@ -311,6 +311,8 @@ public sealed partial class OrganizationSystem
                 return false;
             }
 
+            _organizationFleetShipyard.PrepareCorporateLoadedGrid(loadedGrid.Value);
+
             // Use an isolated allocation for each corporate grid on the shared map.
             // Positions are allocated by width, not by an untrusted location from the blueprint.
             var occupied = _spawnedOrganizationOutposts.Values

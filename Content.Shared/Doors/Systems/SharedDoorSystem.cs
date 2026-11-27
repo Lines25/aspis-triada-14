@@ -1,5 +1,6 @@
 using System.Linq;
 using Content.Shared.Access.Components;
+using Content.Shared._Aspis.Organizations;
 using Content.Shared.Access.Systems;
 using Content.Shared.Administration.Logs;
 using Content.Shared.Damage;
@@ -359,6 +360,13 @@ public abstract partial class SharedDoorSystem : EntitySystem
         var ev = new BeforeDoorOpenedEvent() { User = user };
         RaiseLocalEvent(uid, ev);
         if (ev.Cancelled)
+            return false;
+
+        // Corporate permission checks depend on server-only character membership.
+        // Do not predict a denial (red light/sound) or an unauthorized opening.
+        // The server opens the door normally, with no artificial delay.
+        if (_net.IsClient && (HasComp<OrganizationPropertyAccessReaderComponent>(uid) ||
+                              HasComp<OrganizationOutpostDoorComponent>(uid)))
             return false;
 
         if (!HasAccess(uid, user, door))

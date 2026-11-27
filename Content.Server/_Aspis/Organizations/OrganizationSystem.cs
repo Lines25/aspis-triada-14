@@ -100,7 +100,6 @@ public sealed partial class OrganizationSystem : EntitySystem
     private const long MaxTreasury = 1_000_000_000;
     private const int MarketCapacityBp = 10_000;
     private const int PeacefulExpansionBp = 1_800;
-    private const int MaxInvestment = 100_000;
     private const int DailySectorDemand = 160_000;
     private const int DailyCompanyRevenueLimit = 24_000;
     private const int MinWorkingCapital = 200;
@@ -434,6 +433,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             subs.Event<OrganizationOutpostConfiguratorSelectSlotMessage>(OnAdvancedConfiguratorSelect);
         });
         SubscribeLocalEvent<OrganizationPropertyAccessReaderComponent, OrganizationPropertyAccessCheckEvent>(OnOrganizationPropertyReaderCheck);
+        SubscribeLocalEvent<Content.Shared._Triad.Shipyard.Save.ShipyardShuttleLoadEvent>(OnCorporateSavedShipLoaded);
         SubscribeLocalEvent<AccessReaderComponent, InteractUsingEvent>(OnOrganizationPropertyReaderConfigured);
         SubscribeLocalEvent<OrganizationOutpostConfiguratorComponent,
             Content.Shared.Interaction.InteractHandEvent>(OnOutpostConfiguratorCycle);
@@ -2912,8 +2912,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             return;
         }
         if (!Enum.IsDefined(args.Scope) || !Enum.IsDefined(args.Focus) ||
-            args.Amount is < 100 or > MaxInvestment ||
-            (args.Scope == OrganizationMarketScope.Industry && organization.Kind != OrganizationKind.Company))
+            args.Amount < 100 || organization.Kind != OrganizationKind.Company)
         {
             Refresh(uid, actor, "Некоректні параметри інвестиції.");
             return;
@@ -2944,31 +2943,19 @@ public sealed partial class OrganizationSystem : EntitySystem
         var occupied = market.Sum(o => InfluenceBp(o, args.Scope));
         var free = Math.Max(0, MarketCapacityBp - occupied);
 
-        var cost = (int) Math.Min(10_000L, 100L + owned / 16 + (long) owned * owned / 40_000);
-        var budgetBonus = 75 + organization.BudgetShares[(int) args.Focus];
-        var creditPerPoint = Math.Max(1, (cost * 100 + budgetBonus - 1) / budgetBonus);
-        var creditPerOpenPoint = creditPerPoint * 2;
-        // Competition is represented through demand, costs and free market capacity.
-        // A player's investment must never directly subtract another organization's share.
+        // Competition is represented through free capacity, not direct displacement.
         if (args.Target != null)
         {
             Refresh(uid, actor, "Пряме витіснення конкурентів більше не підтримується.");
             return;
         }
-        var maxPoints = Math.Min(80, args.Amount / creditPerPoint);
-        var peaceful = Math.Min(Math.Min(maxPoints, free), Math.Max(0, PeacefulExpansionBp - owned));
-        var creditsLeft = args.Amount - peaceful * creditPerPoint;
-        var open = owned + peaceful >= PeacefulExpansionBp
-            ? Math.Min(Math.Min(maxPoints - peaceful, Math.Max(0, free - peaceful)),
-                creditsLeft / creditPerOpenPoint)
-            : 0;
-        var gained = peaceful + open;
+        var (gained, spent) = OrganizationInvestmentPricing.Calculate(
+            args.Scope, owned, free, organization.BudgetShares[(int) args.Focus], args.Amount);
         if (gained <= 0)
         {
-            Refresh(uid, actor, "Вільної частки ринку немає. Розвивайте виробництво або інвестуйте в інший напрям.");
+            Refresh(uid, actor, "Недостатньо коштів для наступного пункту впливу або вільної частки ринку немає.");
             return;
         }
-        var spent = peaceful * creditPerPoint + open * creditPerOpenPoint;
         if (!Commit(() =>
         {
             organization.Treasury -= spent;
