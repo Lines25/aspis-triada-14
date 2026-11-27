@@ -58,6 +58,7 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
                 DiscordLink = _window?.DraftDiscordLink ?? string.Empty,
                 Banner = _window?.DraftBanner ?? [],
                 RosterPublic = _window?.DraftRosterPublic ?? true,
+                InvestorsPublic = _window?.DraftInvestorsPublic ?? false,
                 FactionFocus = _window?.DraftFactionFocus ?? OrganizationFactionFocus.None,
                 FactionFoci = _window?.DraftFactionFoci ?? []
             };
@@ -87,6 +88,7 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
             SendMessage(new OrganizationAssignCustomRoleMessage(id, member, role));
         _window.DevelopmentRequested += (id, branch, tier) =>
             SendMessage(new OrganizationDevelopmentMessage(id, branch) { Tier = tier });
+        _window.ExternalInvestmentRequested += (id, amount) => SendMessage(new OrganizationExternalInvestmentMessage(id, amount));
         _window.InvestRequested += (id, scope, focus, amount, target) =>
             SendMessage(new OrganizationInvestMessage(id, scope, focus, amount, target));
         _window.FulfillOrderRequested += id => SendMessage(new OrganizationFulfillOrderMessage(id));

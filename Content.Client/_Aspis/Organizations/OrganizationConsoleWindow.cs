@@ -200,6 +200,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     private readonly CheckBox _private = new() { Text = "Приватна організація (вступ лише через схвалення)" };
     private readonly CheckBox _rosterPublic = new() { Text = "Показувати склад організації стороннім", Pressed = true };
     public bool DraftRosterPublic => _rosterPublic.Pressed;
+    private readonly CheckBox _investorsPublic = new() { Text = "Показувати інвесторів у реєстрі" };
+    public bool DraftInvestorsPublic => _investorsPublic.Pressed;
+    public event Action<Guid, int>? ExternalInvestmentRequested;
     private readonly OptionButton _industry = new();
     // Ordered selections, with at most three tags, survive UI redraws and PNG selection.
     private readonly List<OrganizationFactionFocus> _factionFoci = new();
@@ -2124,6 +2127,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         if (isTdf)
             return;
 
+        AddExternalInvestmentPanel(org, details);
+
         if (_state?.Membership == null)
         {
             var join = new Button { Text = org.Pending ? "Заявку подано" : org.IsPrivate ? "Подати заявку" : "Вступити" };
@@ -2133,6 +2138,51 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         }
         else if (_state.Membership == org.Id)
             details.AddChild(new Label { Text = _state.Ownership == org.Id ? "Ви власник організації" : "Ви учасник організації" });
+    }
+
+    private void AddExternalInvestmentPanel(OrganizationEntry org, BoxContainer details)
+    {
+        var toggle = new Button { Text = "Інвестиції", HorizontalAlignment = HAlignment.Right, MinHeight = 32 };
+        var panel = new BoxContainer { Orientation = LayoutOrientation.Vertical, HorizontalExpand = true,
+            SeparationOverride = 4, Visible = false };
+        toggle.OnPressed += _ => panel.Visible = !panel.Visible;
+        details.AddChild(toggle);
+        details.AddChild(panel);
+        panel.AddChild(new Label { Text = $"Зовнішні внески: {org.ExternalInvestmentTotal:N0} $" });
+        if (org.Kind == OrganizationKind.Company)
+            panel.AddChild(new Label { Text = $"Підтримка цільового котирування: +{org.InvestmentDemandPercent}%" });
+        if (!org.InvestorsPublic && org.ExternalInvestors.Length == 0)
+            panel.AddChild(new Label { Text = "Імена інвесторів приховано." });
+        foreach (var investor in org.ExternalInvestors)
+            panel.AddChild(new Label { Text = WrapText($"{investor.Name}: {investor.Amount:N0} $", 48) });
+        panel.AddChild(new Label { Text = WrapText("Внесок надходить зі свого рахунку до скарбниці. Це не купівля акцій, він не дає права на дивіденди чи повернення.", 48) });
+        var amount = new LineEdit { PlaceHolder = "Сума внеску, $" };
+        var confirm = new Button { Text = "Затвердити внесок", MinHeight = 32,
+            Disabled = org.InsolvencyState != OrganizationInsolvencyState.Active || _state == null || _state.TdfTerminal };
+        var warning = new Label { Text = string.Empty, FontColorOverride = Color.FromHex("#E7A5A5") };
+        var confirmedAmount = -1;
+        confirm.OnPressed += _ =>
+        {
+            var value = ParseAmount(amount);
+            if (value <= 0 || _state == null || value > _state.PersonalBalance)
+            {
+                confirmedAmount = -1;
+                warning.Text = "Некоректна сума або недостатньо коштів.";
+                return;
+            }
+            if (confirmedAmount != value)
+            {
+                confirmedAmount = value;
+                warning.Text = WrapText($"Підтвердіть безповоротний внесок {value:N0} $ до «{org.Name}».", 48);
+                confirm.Text = "Так, переказати кошти";
+                return;
+            }
+            confirm.Disabled = true;
+            ExternalInvestmentRequested?.Invoke(org.Id, value);
+        };
+        panel.AddChild(amount);
+        panel.AddChild(warning);
+        panel.AddChild(confirm);
     }
 
     // Split long company names at natural boundaries, and long single words into chunks.
@@ -4960,6 +5010,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         rules.SeparationOverride = 5;
         rules.AddChild(_private);
         rules.AddChild(_rosterPublic);
+        rules.AddChild(_investorsPublic);
         rules.AddChild(_entryFeeEnabled);
         _fee.MinHeight = 30;
         rules.AddChild(_fee);
@@ -5010,6 +5061,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             privateParent.RemoveChild(_private);
         if (_rosterPublic.Parent is BoxContainer rosterParent)
             rosterParent.RemoveChild(_rosterPublic);
+        if (_investorsPublic.Parent is BoxContainer investorsParent)
+            investorsParent.RemoveChild(_investorsPublic);
         if (_investment.Parent is BoxContainer investmentParent)
             investmentParent.RemoveChild(_investment);
         if (_creationError.Parent is BoxContainer errorParent)

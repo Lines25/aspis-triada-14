@@ -241,6 +241,8 @@ public sealed partial class OrganizationSystem : EntitySystem
         public bool IsPrivate = isPrivate;
         public bool PrivateAccessPurchased = isPrivate;
         public bool RosterPublic = true;
+        public bool InvestorsPublic;
+        public List<OrganizationExternalInvestorRecord> ExternalInvestors = new();
         public int PayrollPerMember;
         public bool PayrollAutomatic;
         public int PayrollProfitPercent = 30;
@@ -444,6 +446,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationConfigureMessage>(OnConfigure);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationLeaveMessage>(OnLeave);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationTreasuryMessage>(OnTreasury);
+        SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationExternalInvestmentMessage>(OnExternalInvestment);
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationInvestMessage>(OnInvest);
         // Legacy open-ended delivery disabled: all manual contract deliveries use sector quotas.
         SubscribeLocalEvent<OrganizationConsoleComponent, OrganizationClaimQuotaMessage>(OnClaimQuota);
@@ -1321,6 +1324,9 @@ public sealed partial class OrganizationSystem : EntitySystem
                 IsPrivate = org.IsPrivate,
                 PrivateAccessPurchased = org.PrivateAccessPurchased,
                 RosterPublic = org.RosterPublic,
+                InvestorsPublic = org.InvestorsPublic,
+                ExternalInvestors = org.ExternalInvestors.Select(i => new OrganizationExternalInvestorRecord
+                { UserId = i.UserId, Slot = i.Slot, Name = i.Name, Amount = i.Amount }).ToList(),
                 PayrollPerMember = org.PayrollPerMember,
                 PayrollAutomatic = org.PayrollAutomatic,
                 PayrollProfitPercent = org.PayrollProfitPercent,
@@ -1521,7 +1527,7 @@ public sealed partial class OrganizationSystem : EntitySystem
                 data.SectorInfluenceBp is < 0 or > MarketCapacityBp ||
                 data.IndustryInfluenceBp is < 0 or > MarketCapacityBp ||
                 (data.Kind == OrganizationKind.Faction && data.IndustryInfluenceBp != 0) ||
-                data.CapitalSpent < 0 || data.GrossRevenue < 0 || data.OperatingCosts < 0 ||
+                !ValidExternalInvestors(data.ExternalInvestors) || data.CapitalSpent < 0 || data.GrossRevenue < 0 || data.OperatingCosts < 0 ||
                 data.DailyGrossRevenue is < 0 or > DailyCompanyRevenueLimit ||
                 data.EntryFee is < 0 or > MaxEntryFee || data.Treasury is < 0 or > MaxTreasury ||
                 data.InitialInvestment is < 0 or > MaxInitialInvestment || !ValidShares(data.BudgetShares) ||
@@ -1626,6 +1632,8 @@ public sealed partial class OrganizationSystem : EntitySystem
                 data.IsPrivate, data.EntryFee, color)
             {
                 RosterPublic = data.RosterPublic,
+                InvestorsPublic = data.InvestorsPublic,
+                ExternalInvestors = data.ExternalInvestors ?? new(),
                 // A private organization created before this version already paid at registration.
                 PrivateAccessPurchased = data.PrivateAccessPurchased || data.IsPrivate,
                 FactionFocus = data.Kind == OrganizationKind.Faction && Enum.IsDefined(data.FactionFocus)
@@ -2049,6 +2057,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             Treasury = args.Investment,
             BudgetShares = shares,
             RosterPublic = args.RosterPublic,
+            InvestorsPublic = args.InvestorsPublic,
             FactionFocus = args.Kind == OrganizationKind.Faction ? args.FactionFoci[0] : OrganizationFactionFocus.None,
             FactionFoci = args.Kind == OrganizationKind.Faction
                 ? (OrganizationFactionFocus[])args.FactionFoci.Clone() : [],
@@ -3268,8 +3277,8 @@ public sealed partial class OrganizationSystem : EntitySystem
     }
 
     private static int InitialQuote(Organization org) => Math.Clamp(
-        75 + org.CompanyLevel * 20 + org.SectorInfluenceBp / 25 + org.IndustryInfluenceBp / 25,
-        40, MaxQuote);
+        (int)((75L + org.CompanyLevel * 20L + org.SectorInfluenceBp / 25 + org.IndustryInfluenceBp / 25)
+            * (100 + InvestmentDemandPercent(org)) / 100), 40, MaxQuote);
 
     // One economic cycle creates a single durable allocation. Equity held by the
     // corporate reserve earns nothing; rounding residuals remain in the treasury.
@@ -3417,7 +3426,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         if (!AuthorizedBusiness(uid, actor) || !TryGetCharacter(actor, out var key, out var name) ||
             !_organizations.TryGetValue(args.Organization, out var org) ||
             org.Kind != OrganizationKind.Company || !_store.Available ||
-            IsTradingSuspended(org) || !Enum.IsDefined(args.Order) || args.Quantity is < 1 or > MaxTradeQuantity)
+            IsTradingSuspended(org) || args.Order is not (OrganizationStockOrder.Buy or OrganizationStockOrder.Sell or OrganizationStockOrder.Issue) || args.Quantity is < 1 or > MaxTradeQuantity)
             return;
 
         var holderKey = (key.UserId, key.Slot);
@@ -3473,6 +3482,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         // Aggregate successive small orders and reversals, not just one huge sale.
         var recentTrades = _tradeLedger.Where(t => t.Organization == org.Id &&
             t.TraderUserId == key.UserId && t.TraderSlot == key.Slot &&
+            t.Order != OrganizationStockOrder.ExternalInvestment &&
             t.Utc > DateTime.UtcNow - TimeSpan.FromMinutes(10)).ToArray();
         var combinedQuantity = quantity + recentTrades.Sum(t => (long) t.Quantity);
         var combinedValue = total + recentTrades.Sum(t => t.Total);
@@ -3481,8 +3491,9 @@ public sealed partial class OrganizationSystem : EntitySystem
         // A market alert indicates *review required*, never automatic guilt.
         var flagged = quantity * 100L >= oldIssued * 5L || total >= 5_000 ||
             combinedQuantity * 100L >= oldIssued * 10L || combinedValue >= 10_000 || reversal;
-        var reason = flagged ? reversal ? "Швидка зміна напрямку торгів" :
-            "Значний разовий або сукупний обсяг за 10 хвилин" : string.Empty;
+        var reason = flagged ? reversal ? "II — Різкий розворот торгів (перевірка можливого штучного розгону ціни)" :
+            args.Order == OrganizationStockOrder.Issue ? "II — Значне розмивання часток (випуск акцій)" :
+            "I — Незвичний разовий або сукупний обсяг торгів" : string.Empty;
         var entry = new OrganizationTradeRecord
         {
             Utc = DateTime.UtcNow, Organization = org.Id, Company = org.Name,
@@ -3617,6 +3628,13 @@ public sealed partial class OrganizationSystem : EntitySystem
                 o.IndustryInfluenceBp / 100f, o.CapitalSpent, o.CrisisActive)
             {
                 RosterPublic = o.RosterPublic,
+                InvestorsPublic = o.InvestorsPublic,
+                ExternalInvestmentTotal = TotalExternalInvestment(o),
+                InvestmentDemandPercent = InvestmentDemandPercent(o),
+                ExternalInvestors = o.InvestorsPublic || (canOperate && o.Owner == key) ||
+                    (canOperate && CanInspectExternalInvestors(actor, console, key))
+                    ? o.ExternalInvestors.OrderByDescending(i => i.Amount).Select(i => new OrganizationInvestorEntry(i.Name, i.Amount)).ToArray()
+                    : [],
                 FactionFocus = o.FactionFocus,
                 FactionFoci = (OrganizationFactionFocus[])o.FactionFoci.Clone(),
                 InsolvencyState = o.InsolvencyState,
@@ -3639,7 +3657,12 @@ public sealed partial class OrganizationSystem : EntitySystem
             TdfAuthorityId, "TDF — служба контролю сектора", "Сектор", OrganizationKind.Faction,
             OrganizationIndustry.None, true, 0, "#D6AD67", tdfMembers.Length, false,
             TdfSectorMandatePercent + (_tdfOperationalBp + _tdfLongTermBp) / 100f,
-            0f, 0, false)];
+            0f, 0, false)
+        {
+            FactionFocus = OrganizationFactionFocus.Defense,
+            FactionFoci = [OrganizationFactionFocus.Defense, OrganizationFactionFocus.Security],
+            Description = "Після Мережного Шторму захист віддалених секторів перейшов до незалежних організацій за системою Грантового Захисту. Корпоративні війни та поява Моноліту змусили Федерацію повернути свої сили до Фронтиру. Нині, під владою Ради Сол, TDF забезпечує порядок у секторі, охороняє його інфраструктуру та здійснює нагляд за діяльністю корпорацій. На службі TDF лежить захист територій від залишків сил Паетонів і повстанських угрупувань, а також контроль за дотриманням антимонопольного законодавства."
+        }];
         var members = (canOperate ? management : null)?.Members.Values.OrderByDescending(m => m.Role).ThenBy(m => m.Name)
             .Select(m => new OrganizationMemberEntry(m.Id, m.Name, m.Role,
                 IsMemberPresent(m.Key), management!.DeputyMemberId == m.Id, MemberTitle(management!, m), m.Distinction)
@@ -3875,7 +3898,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             TdfAlerts = tdfAccess
                 ? _tradeLedger.TakeLast(100).Select(t =>
                     new OrganizationTradeAlertEntry(t.Utc, t.Company, t.TraderName,
-                        $"{t.Order}: {t.Quantity} акцій, {t.Total:N0} $" +
+                        $"{(t.Order == OrganizationStockOrder.ExternalInvestment ? "Зовнішній внесок" : $"{t.Order}: {t.Quantity} акцій")}, {t.Total:N0} $" +
                         (t.Flagged ? $" — ПЕРЕВІРКА: {t.Reason}" : string.Empty), t.Flagged)
                         { SourceKey = t.Flagged ? TdfTradeSourceKey(t) : string.Empty })
                     .Concat(_concentrationAlerts.TakeLast(100).Select(a =>

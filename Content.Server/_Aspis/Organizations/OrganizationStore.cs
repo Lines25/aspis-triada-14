@@ -224,6 +224,14 @@ public sealed class OrganizationFactionFindingRecord
     public DateTime RecordedUtc { get; set; }
 }
 
+public sealed class OrganizationExternalInvestorRecord
+{
+    public string UserId { get; set; } = string.Empty;
+    public int Slot { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public long Amount { get; set; }
+}
+
 public sealed class OrganizationRecord
 {
     public Guid Id { get; set; }
@@ -241,6 +249,8 @@ public sealed class OrganizationRecord
     public bool IsPrivate { get; set; }
     public bool PrivateAccessPurchased { get; set; }
     public bool RosterPublic { get; set; } = true;
+    public bool InvestorsPublic { get; set; }
+    public List<OrganizationExternalInvestorRecord> ExternalInvestors { get; set; } = new();
     public int PayrollPerMember { get; set; }
     public bool PayrollAutomatic { get; set; }
     public int PayrollProfitPercent { get; set; } = 30;
