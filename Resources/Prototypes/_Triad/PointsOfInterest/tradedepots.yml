@@ -35,7 +35,7 @@
 - type: gameMap
   id: TradeDepot
   mapName: 'Auric Trade Depot' # Has a letter appended in PointOfInterestSystem
-  mapPath: /Maps/_Triad/POI/tradedepotalt.yml
+  mapPath: /Maps/_Triad/POI/tradedepot.yml
   minPlayers: 0
   stations:
     TradeDepot:

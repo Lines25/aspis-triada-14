@@ -3,6 +3,8 @@ using Content.Server._Aspis.Organizations;
 using Content.Shared._Aspis.Organizations;
 using Content.Shared.Cargo;
 using Content.Server._NF.Trade;
+using Content.Server.Station.Components;
+using Robust.Shared.Map.Components;
 using Content.Shared._NF.Trade;
 
 namespace Content.Server.Cargo.Systems;
@@ -40,6 +42,8 @@ public sealed partial class CargoSystem
 
     private bool IsQuotaTradeHubStation(EntityUid station) =>
         !TerminatingOrDeleted(station) && HasComp<OrganizationTradeHubComponent>(station) &&
+        TryComp<StationDataComponent>(station, out var data) &&
+        data.Grids.Any(grid => !TerminatingOrDeleted(grid) && HasComp<MapGridComponent>(grid)) &&
         TryComp<TradeCrateDestinationComponent>(station, out var destination) &&
         destination.DestinationProto.Id == "Trade";
 
@@ -86,6 +90,8 @@ public sealed partial class CargoSystem
         foreach (var uid in _destinations)
         {
             if (TerminatingOrDeleted(uid) ||
+                !TryComp<StationDataComponent>(uid, out var data) ||
+                !data.Grids.Any(grid => !TerminatingOrDeleted(grid) && HasComp<MapGridComponent>(grid)) ||
                 !TryComp<TradeCrateDestinationComponent>(uid, out var component) ||
                 component.DestinationProto.Id != depotId)
                 continue;

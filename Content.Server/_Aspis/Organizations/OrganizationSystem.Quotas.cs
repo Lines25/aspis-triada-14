@@ -479,6 +479,10 @@ public sealed partial class OrganizationSystem
                 "Авторитет фракції поступово скорочує цей час.");
             return;
         }
+        // Revalidate agriculture offers when a stale console submits a claim.
+        if (org.Kind == OrganizationKind.Company && org.Industry == OrganizationIndustry.Agriculture &&
+            args.Slot < AspisPlanetaryAgriculturalSlot)
+            PrepareAspisAgriculturalOffers();
         var offer = GetOrCreateQuotaOffer(org.Kind, args.Category, args.Slot);
         if (offer == null)
         {
@@ -511,8 +515,19 @@ public sealed partial class OrganizationSystem
         if ((org.Kind == OrganizationKind.Faction || offer.Scenario.Workflow == OrganizationQuotaWorkflow.CargoDelivery) &&
             !_quotaCargoSystem.HasQuotaTradeHub())
         {
-            Refresh(uid, args.Actor, "Auric Trade Center зараз недоступний. Завдання не зарезервовано.");
+            Refresh(uid, args.Actor, "Не вдалося прийняти: Auric Trade Center недоступний.");
             return;
+        }
+        if (org.Kind == OrganizationKind.Company &&
+            offer.Scenario.Workflow == OrganizationQuotaWorkflow.AgriculturalExport &&
+            args.Slot < AspisPlanetaryAgriculturalSlot)
+        {
+            var post = Array.FindIndex(offer.PostTargets, count => count > 0);
+            if (post < 0 || !_quotaCargoSystem.TryGetQuotaTradeDestination(post, out _))
+            {
+                Refresh(uid, args.Actor, "Не вдалося прийняти: торгове депо Auric недоступне.");
+                return;
+            }
         }
         // Fail closed when physical delivery infrastructure has not spawned.
         if (org.Kind == OrganizationKind.Company &&
@@ -524,7 +539,7 @@ public sealed partial class OrganizationSystem
             if (offer.Scenario.Workflow == OrganizationQuotaWorkflow.CargoDelivery &&
                 !_quotaCargoSystem.HasAllQuotaTradeDestinations())
             {
-                Refresh(uid, args.Actor, "Торгові депо Auric A–D зараз недоступні.");
+                Refresh(uid, args.Actor, "Не вдалося прийняти: торгові депо Auric A–D недоступні.");
                 return;
             }
             for (var post = 0; post < offer.PostTargets.Length; post++)
@@ -532,7 +547,7 @@ public sealed partial class OrganizationSystem
                 if (offer.PostTargets[post] <= 0 ||
                     _quotaCargoSystem.TryGetQuotaTradeDestination(post, out _))
                     continue;
-                Refresh(uid, args.Actor, $"Торговий пост {(char)('A' + post)} зараз недоступний.");
+                Refresh(uid, args.Actor, $"Не вдалося прийняти: депо Auric {(char)('A' + post)} недоступне.");
                 return;
             }
         }

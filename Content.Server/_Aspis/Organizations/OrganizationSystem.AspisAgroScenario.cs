@@ -69,8 +69,8 @@ public sealed partial class OrganizationSystem
         var crop = AspisAgriculturalCargo[slot];
         var target = destination is >= 0 and < 4 &&
             _quotaCargoSystem.TryGetQuotaTradeDestination(destination, out _)
-            ? $"поста {(char)('A' + destination)}"
-            : "доступного торговельного поста Cargo";
+            ? $"Auric Trade Depot {(char)('A' + destination)}"
+            : "призначеному депо (зараз недоступне)";
         return $"Потрібна культура: {crop.Label} (урожай або насіння тільки цієї культури). " +
                $"Підготуйте {units} ящиків, щонайменше " +
                $"{OrganizationQuotaRules.ExportItemsPerCrate(OrganizationQuotaWorkflow.AgriculturalExport, slot)} " +
@@ -93,7 +93,9 @@ public sealed partial class OrganizationSystem
             var availablePosts = Enumerable.Range(0, 4)
                 .Where(post => _quotaCargoSystem.TryGetQuotaTradeDestination(post, out _))
                 .ToArray();
-            var destination = availablePosts.Length > 0 ? availablePosts[slot % availablePosts.Length] : 0;
+            if (availablePosts.Length == 0)
+                continue; // Never manufacture a destination when the sector has no depot.
+            var destination = availablePosts[slot % availablePosts.Length];
             var alreadyValid = current.Units == count &&
                 current.PostTargets[destination] == count &&
                 current.PostTargets.Sum() == count;
