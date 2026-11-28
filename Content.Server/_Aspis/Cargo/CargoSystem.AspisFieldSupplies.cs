@@ -10,7 +10,7 @@ namespace Content.Server.Cargo.Systems;
 public sealed partial class CargoSystem
 {
         /// <summary>
-        /// Reuses ordinary Trade Mall Cargo Requests for a single faction field
+        /// Reuses ordinary Auric Trade Center Cargo Requests for a single faction field
         /// kit crate. The Aspis organization system authenticates and consumes
         /// its one-use physical invoice before calling this method.
         /// </summary>
@@ -21,7 +21,7 @@ public sealed partial class CargoSystem
             if (organization == Guid.Empty || code.Length is < 6 or > 48 ||
                 requester.Length is < 1 or > 100 ||
                 !TryComp<CargoOrderConsoleComponent>(console, out var control) ||
-                !IsQuotaTradeMall(Transform(console).GridUid) ||
+                !IsQuotaTradeHub(Transform(console).GridUid) ||
                 !_protoMan.HasIndex<EntityPrototype>(product) ||
                 !TryGetOrderDatabase(console, out var station, out var database, control) ||
                 database.Capacity - GetOutstandingOrderCount(database) -

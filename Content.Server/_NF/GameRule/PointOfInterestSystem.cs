@@ -109,6 +109,9 @@ public sealed partial class PointOfInterestSystem : EntitySystem
         marketStations = new List<EntityUid>();
         var marketCount = _cfg.GetCVar(NFCCVars.MarketStations);
         _random.Shuffle(marketPrototypes);
+        // Corporate Cargo Requests need the main trade hub, not a random optional market.
+        // Triad's TradeCenter is the actual corporate hub; the old TradeMall is disabled.
+        marketPrototypes = marketPrototypes.OrderBy(p => p.ID == "TradeCenter" ? 0 : 1).ToList();
         int marketsAdded = 0;
 
         if (_ticker.CurrentPreset is null)
@@ -131,6 +134,8 @@ public sealed partial class PointOfInterestSystem : EntitySystem
                 marketStations.Add(market);
                 marketsAdded++;
                 AddStationCoordsToSet(offset);
+                if (proto.ID == "TradeCenter")
+                    Logger.Info($"Corporate trade hub {proto.Name}: X={offset.X:0}, Y={offset.Y:0}, map={mapUid}.");
             }
         }
     }

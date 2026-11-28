@@ -72,7 +72,9 @@ public sealed partial class OrganizationSystem
             _quotaPaper.SetContent((printed, paper),
                 $"НАКЛАДНА НА ВАНТАЖ\nНомер: {claim.Code}\nОрганізація: {org.Name}\nЯщиків: {claim.Units}\n" +
                 (workflow == OrganizationQuotaWorkflow.CargoDelivery
-                    ? "Вставте накладну в консоль Cargo Requests. Документ одноразовий."
+                    ? (claim.Scenario.Id == FrontierScenarioId
+                        ? "Вставте накладну в Cargo Requests та схваліть першу партію. Решта ящиків надійде автоматично партіями до 20."
+                        : "Вставте накладну в консоль Cargo Requests. Документ одноразовий.")
                     : "Прикріпіть накладну до вантажного ящика. Вміст перевіряється при продажу через Cargo."));
 
         _quotaManifestPrintCooldowns[character] = _gameTiming.CurTime;
@@ -122,7 +124,7 @@ public sealed partial class OrganizationSystem
                     claim.Code, character.CharacterName))
             {
                 _quotaPopup.PopupEntity("Накладна недійсна, комплект уже замовлено або " +
-                    "консоль не належить Trade Mall.", args.User, args.User);
+                    "консоль не належить Auric Trade Center.", args.User, args.User);
                 return;
             }
             claim.FactionKitOrdered = true;
@@ -131,14 +133,15 @@ public sealed partial class OrganizationSystem
             claim.FactionKitInvoice = null;
             QueueDel(args.Used);
             _quotaPopup.PopupEntity("Карго прийняло накладну. Комплект поставлено в чергу " +
-                "Requests на Trade Mall (потрібне схвалення карго).", args.User, args.User);
+                "Requests на Auric Trade Center (потрібне схвалення карго).", args.User, args.User);
             _audio.PlayPvs(MoneyConfirmSound, console);
             return;
         }
 
         // The four physical trade posts must exist before a delivery is issued.
         // Otherwise a player could pay for a quota they cannot possibly complete.
-        if (!_quotaCargoSystem.TryGetQuotaTradeDestination(3, out _))
+        if (claim.Scenario.Id != FrontierScenarioId &&
+            !_quotaCargoSystem.HasAllQuotaTradeDestinations())
         {
             _quotaPopup.PopupEntity("Квота недоступна: торгові пости A-D ще не завантажені на мапі.",
                 args.User, args.User);
@@ -151,7 +154,7 @@ public sealed partial class OrganizationSystem
                 character.CharacterName, claim.Units, claim.CargoRequestedCrates, claim.PostTargets, out var queued,
                 claim.Scenario.Id == FrontierScenarioId))
         {
-            _quotaPopup.PopupEntity("Карго не приймає накладну. Перевірте Trade Mall, місткість черги та CrateTradeSecureNormal.",
+            _quotaPopup.PopupEntity("Карго не приймає накладну. Перевірте Auric Trade Center, місткість черги та CrateTradeSecureNormal.",
                 args.User, args.User);
             return;
         }
@@ -160,7 +163,9 @@ public sealed partial class OrganizationSystem
         _adminLog.Add(LogType.Action, LogImpact.Low,
             $"Quota manifest inserted: code={claim.Code}, user={character.UserId}, crates={queued}");
         _audio.PlayPvs(MoneyConfirmSound, console);
-        _quotaPopup.PopupEntity($"Накладну {claim.Code} прийнято. Заявка на {queued} ящиків додана до Requests.",
+        _quotaPopup.PopupEntity(claim.Scenario.Id == FrontierScenarioId
+                ? $"Накладну {claim.Code} прийнято: {queued} ящиків. Схваліть першу партію в Requests; решта надійде автоматично."
+                : $"Накладну {claim.Code} прийнято. Заявка на {queued} ящиків додана до Requests.",
             args.User, args.User);
         QueueDel(args.Used);
     }
@@ -217,12 +222,12 @@ public sealed partial class OrganizationSystem
         if (TryComp<PaperComponent>(invoice, out var paper))
             _quotaPaper.SetContent((invoice, paper),
                 $"ПОСТАЧАННЯ ПОЛЬОВОГО ОБЛАДНАННЯ\nФракція: {org.Name}\nЗавдання: {code}\n" +
-                "Один комплект. Вставте цей документ у Cargo Requests на Trade Mall.\n" +
+                "Один комплект. Вставте цей документ у Cargo Requests на Auric Trade Center.\n" +
                 "Карго повинне схвалити замовлення та дочекатися доставки.");
         _quotaManifestPrintCooldowns[character] = _gameTiming.CurTime;
         _hands.TryPickupAnyHand(actor, invoice);
         _audio.PlayPvs(QuotaManifestPrinterSound, actor);
-        _quotaPopup.PopupEntity("КПК надрукував накладну. Віднесіть її до Cargo Requests на Trade Mall.",
+        _quotaPopup.PopupEntity("КПК надрукував накладну. Віднесіть її до Cargo Requests на Auric Trade Center.",
             actor, actor);
     }
 

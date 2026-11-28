@@ -1,4 +1,6 @@
 using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using Content.Shared._Aspis.Organizations;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
@@ -80,6 +82,51 @@ public sealed partial class PlayTimeTrackingManager : ISharedPlaytimeManager, IP
     private readonly List<Task> _pendingSaveTasks = new();
 
     private readonly Dictionary<ICommonSession, PlayTimeData> _playTimeData = new();
+
+    private readonly HashSet<(ICommonSession Session, string Tracker)> _investmentTrackerResets = new();
+
+    public bool IsInvestmentTrackerResetting(ICommonSession session, string tracker) =>
+        _investmentTrackerResets.Contains((session, tracker));
+
+    public bool TryGetInvestmentCharacterTime(ICommonSession session, string tracker, out TimeSpan played)
+    {
+        played = TimeSpan.Zero;
+        if (IsInvestmentTrackerResetting(session, tracker) || !TryGetTrackerTimes(session, out var times))
+            return false;
+        FlushTracker(session);
+        played = times.GetValueOrDefault(tracker);
+        return true;
+    }
+
+    // Save zero before persisting a replacement profile; the slot cannot inherit hours.
+    public async Task<bool> ResetInvestmentCharacterTime(ICommonSession session, int slot)
+    {
+        var tracker = OrganizationInvestmentPlaytimeRules.Tracker(slot);
+        var reset = (session, tracker);
+        if (!_playTimeData.TryGetValue(session, out var data) || !data.Initialized ||
+            !_investmentTrackerResets.Add(reset))
+            return false;
+        try
+        {
+            FlushTracker(session);
+            data.ActiveTrackers.Remove(tracker);
+            data.TrackerTimes[tracker] = TimeSpan.Zero;
+            data.DbTrackersDirty.Remove(tracker);
+            await Task.WhenAll(_pendingSaveTasks.ToArray());
+            await _db.UpdatePlayTimes(new[] { new PlayTimeUpdate(session.UserId, tracker, TimeSpan.Zero) });
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _sawmill.Error($"Unable to reset character investment playtime: {ex}");
+            data.DbTrackersDirty.Add(tracker);
+            return false;
+        }
+        finally
+        {
+            _investmentTrackerResets.Remove(reset);
+        }
+    }
 
     public event CalcPlayTimeTrackersCallback? CalcTrackers;
 

@@ -135,6 +135,10 @@ public sealed class XenoArtifactShipSaveTest
         await server.WaitAssertion(() =>
         {
             var comp = entMan.GetComponent<XenoArtifactComponent>(artifact);
+            // Prevent ambient triggers (e.g. pressure or temperature) from opening a new
+            // unlock session while the regenerated graph settles. The legacy session below
+            // is deliberately injected independently of suppression.
+            artifactSystem.SetSuppressed((artifact, comp), true);
             var unlocking = entMan.EnsureComponent<XenoArtifactUnlockingComponent>(artifact);
             unlocking.TriggeredNodeIndexes.Add(artifactSystem.GetAllNodeIndices((artifact, comp)).First());
             unlocking.EndTime = server.Timing.CurTime;
@@ -160,6 +164,8 @@ public sealed class XenoArtifactShipSaveTest
 
         var scrubbedYaml = ShipSaveYamlSanitizer.ScrubShipLoadYaml(yaml!, out var scrubbed);
         Assert.That(scrubbed, Is.GreaterThan(0), "The load scrub left an artifact graph naming missing nodes.");
+        Assert.That(scrubbedYaml, Does.Not.Contain("XenoArtifactUnlocking"),
+            "The legacy unlock session was not stripped from the file.");
 
         var loaded = await LoadShipYaml(server, mapLoader, scrubbedYaml, map);
         await server.WaitRunTicks(5);
@@ -175,6 +181,7 @@ public sealed class XenoArtifactShipSaveTest
 
             Assert.Multiple(() =>
             {
+                Assert.That(comp.Suppressed, Is.True, "Fixture: ambient triggers must remain suppressed after loading.");
                 Assert.That(entMan.HasComponent<XenoArtifactUnlockingComponent>(uid), Is.False,
                     "The unlock session from the file survived the load.");
                 Assert.That(comp.IsGenerationRequired, Is.False, "The artifact still owes a graph.");

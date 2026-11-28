@@ -15,11 +15,33 @@ namespace Content.Server._Aspis.Organizations;
 public sealed partial class OrganizationSystem
 {
     private const int MaxTdfCases = 160;
-    private const int MaxTdfCaseActions = 16;
+    private const int MaxTdfCaseActions = 64;
 
     // Evidence identifiers are deterministic and survive persistence of the original logs.
     private static string TdfSourceHash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..32];
+
+    private static string TdfTradeOperation(OrganizationTradeRecord trade) => trade.Order switch
+    {
+        OrganizationStockOrder.Buy => "Купівля акцій",
+        OrganizationStockOrder.Sell when !string.IsNullOrWhiteSpace(trade.CounterpartyName) => "Біржова угода",
+        OrganizationStockOrder.Sell => "Продаж акцій",
+        OrganizationStockOrder.Issue => "Випуск акцій",
+        OrganizationStockOrder.ExternalInvestment => "Внесок до скарбниці",
+        _ => "Запис біржі"
+    };
+
+    private static string TdfTradeDescription(OrganizationTradeRecord trade)
+    {
+        var operation = TdfTradeOperation(trade);
+        var description = trade.Order switch
+        {
+            OrganizationStockOrder.ExternalInvestment => $"{operation}: {trade.Total:N0} $",
+            OrganizationStockOrder.Issue => $"{operation}: {trade.Quantity:N0} шт.",
+            _ => $"{operation}: {trade.Quantity:N0} шт., {trade.Total:N0} $"
+        };
+        return trade.Flagged ? $"{description}\n{trade.Reason}" : description;
+    }
 
     // A client-visible source key must not disclose the trader's private account ID.
     private static string TdfTradeSourceKey(OrganizationTradeRecord t) =>
@@ -115,7 +137,7 @@ public sealed partial class OrganizationSystem
             }
             organization = concentration.Organization;
             company = concentration.Company;
-            subject = "Секторна антимонопольна служба";
+            subject = string.IsNullOrEmpty(concentration.Operation) ? "Секторна антимонопольна служба" : "Автономна економіка";
             reason = concentration.Reason;
         }
         if (string.IsNullOrWhiteSpace(company) || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(reason))
@@ -132,7 +154,7 @@ public sealed partial class OrganizationSystem
             [
                 new OrganizationTdfCaseActionRecord
                 {
-                    Utc = now, Officer = officer, Description = "Відкрито перевірку за фінансовим сигналом."
+                    Utc = now, Officer = officer, Description = "Справу відкрито."
                 }
             ]
         };
@@ -143,13 +165,13 @@ public sealed partial class OrganizationSystem
         }
         _adminLog.Add(LogType.Action, LogImpact.Medium,
             $"TDF case OPEN id={docket.Id} source={docket.SourceKey} org={organization} officer={officer}");
-        Refresh(uid, args.Actor, "Фінансову перевірку відкрито.");
+        Refresh(uid, args.Actor, "Справу відкрито. Матеріали доступні у вкладці нагляду.");
     }
 
     private void OnTdfResolveCase(EntityUid uid, OrganizationConsoleComponent comp, OrganizationTdfResolveCaseMessage args)
     {
         if (!TryAuthorizeTdfReview(uid, args.Actor, true, out var officer) ||
-            args.Status is not (OrganizationTdfCaseStatus.Cleared or OrganizationTdfCaseStatus.Referred) ||
+            args.Status is not (OrganizationTdfCaseStatus.Open or OrganizationTdfCaseStatus.Cleared or OrganizationTdfCaseStatus.Referred) ||
             args.Note == null)
             return;
         var note = args.Note.Trim().Replace('\r', ' ').Replace('\n', ' ');
@@ -159,9 +181,10 @@ public sealed partial class OrganizationSystem
             return;
         }
         var docket = _tdfCases.FirstOrDefault(c => c.Id == args.CaseId);
-        if (docket == null || docket.Status != OrganizationTdfCaseStatus.Open)
+        var reopening = args.Status == OrganizationTdfCaseStatus.Open;
+        if (docket == null || (docket.Status == OrganizationTdfCaseStatus.Open) == reopening)
         {
-            Refresh(uid, args.Actor, "Справу не знайдено або рішення вже ухвалено.");
+            Refresh(uid, args.Actor, "Стан справи змінився. Оновіть журнал.");
             return;
         }
         var now = DateTime.UtcNow;
@@ -174,9 +197,12 @@ public sealed partial class OrganizationSystem
                 {
                     Utc = now,
                     Officer = officer,
-                    Description = (args.Status == OrganizationTdfCaseStatus.Cleared
-                        ? "Справу закрито без підтвердження порушення: "
-                        : "Справу направлено на подальший розгляд: ") + note
+                    Description = (args.Status switch
+                    {
+                        OrganizationTdfCaseStatus.Open => "Справу поновлено. Нові відомості: ",
+                        OrganizationTdfCaseStatus.Cleared => "Порушення не встановлено: ",
+                        _ => "Передано на службовий розгляд: "
+                    }) + note
                 });
                 if (docket.History.Count > MaxTdfCaseActions)
                     docket.History.RemoveAt(0);
@@ -187,6 +213,6 @@ public sealed partial class OrganizationSystem
         }
         _adminLog.Add(LogType.Action, LogImpact.High,
             $"TDF case DECISION id={docket.Id} status={args.Status} officer={officer} note={note}");
-        Refresh(uid, args.Actor, "Рішення TDF зареєстровано.");
+        Refresh(uid, args.Actor, reopening ? "Справу поновлено. Вона знову в журналі відкритих справ." : "Рішення TDF зареєстровано.");
     }
 }

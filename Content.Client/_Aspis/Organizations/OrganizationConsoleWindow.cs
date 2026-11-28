@@ -15,7 +15,7 @@ using static Robust.Client.UserInterface.Controls.BoxContainer;
 
 namespace Content.Client._Aspis.Organizations;
 
-public sealed class OrganizationConsoleWindow : DefaultWindow
+public sealed partial class OrganizationConsoleWindow : DefaultWindow
 {
     public event Action<string, OrganizationKind, OrganizationIndustry, bool, int, string, int, int, int, int, int>? CreateRequested;
     public event Action<Guid>? JoinRequested;
@@ -200,6 +200,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     private readonly CheckBox _private = new() { Text = "Приватна організація (вступ лише через схвалення)" };
     private readonly CheckBox _rosterPublic = new() { Text = "Показувати склад організації стороннім", Pressed = true };
     public bool DraftRosterPublic => _rosterPublic.Pressed;
+    private readonly CheckBox _investorsPublic = new() { Text = "Показувати інвесторів у реєстрі" };
+    public bool DraftInvestorsPublic => _investorsPublic.Pressed;
+    public event Action<Guid, int>? ExternalInvestmentRequested;
     private readonly OptionButton _industry = new();
     // Ordered selections, with at most three tags, survive UI redraws and PNG selection.
     private readonly List<OrganizationFactionFocus> _factionFoci = new();
@@ -274,7 +277,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
     }
 
     private static int FoundingPrice(OrganizationKind kind, bool isPrivate) =>
-        500_000 + (isPrivate ? 75_000 : 0) + (kind == OrganizationKind.Faction ? 100_000 : 0);
+        500_000 + (isPrivate ? OrganizationPrivateEntryRules.Price : 0) + (kind == OrganizationKind.Faction ? 100_000 : 0);
 
 
     private OrganizationConsoleState? _state;
@@ -592,11 +595,24 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
 
     private Control BuildTdfView()
     {
-        var panel = BuildTitledPanel("TDF: Ринковий нагляд", out var content, true);
-        var scroll = new ScrollContainer { HScrollEnabled = false, HorizontalExpand = true, VerticalExpand = true };
-        scroll.AddChild(_tdfBody);
-        content.AddChild(scroll);
-        return panel;
+        // Use the same free-standing panel layout as the quota tab.
+        var root = new BoxContainer
+        {
+            Orientation = LayoutOrientation.Vertical,
+            HorizontalExpand = true,
+            VerticalExpand = true,
+            SeparationOverride = 8
+        };
+        root.AddChild(new Label
+        {
+            Text = "TDF / Фінансовий нагляд",
+            FontColorOverride = Color.FromHex("#C8D7E8")
+        });
+        _tdfBody.HorizontalExpand = true;
+        _tdfBody.VerticalExpand = true;
+        _tdfBody.SeparationOverride = 10;
+        root.AddChild(_tdfBody);
+        return root;
     }
 
     // Collapsible sections keep the overview readable without removing details.
@@ -1324,7 +1340,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 _state.FactionAuthorityPoints >= neededAuthority;
             var card = BuildTitledPanel(label, out var detail);
             AddMetric(detail, "Рівень програми", $"{level}/5");
-            detail.AddChild(new Label { Text = description,
+            detail.AddChild(new Label { Text = WrapText(description, 40),
                 FontColorOverride = Color.FromHex("#A9BBCA") });
             var squares = new BoxContainer { Orientation = LayoutOrientation.Horizontal, SeparationOverride = 4 };
             for (var i = 0; i < 5; i++)
@@ -1838,6 +1854,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         if (changedIdentity)
             _outpostLocalNotice = string.Empty;
         _tabButtons[ConsoleTab.Tdf].Visible = state.TdfAuthorized;
+        if (!state.TdfAuthorized)
+            ResetTdfReviewSelection();
         _tabButtons[ConsoleTab.Creation].Visible = state.Membership == null;
         _tabButtons[ConsoleTab.Services].Visible = state.Membership != null;
         if (_activeTab == ConsoleTab.Creation && state.Membership != null)
@@ -1852,6 +1870,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         _previousViewedBody = state.ViewedBody;
         if (changedIdentity)
         {
+            ResetTdfReviewSelection();
             _leaveConfirmation = false;
             _outpostPurchaseConfirm = false;
             _outpostReplaceConfirm = false;
@@ -1874,6 +1893,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             _assetsBranchesInfo = false;
             _developmentExpanded = false;
             _economyExpanded = false;
+            ResetInvestmentOverview();
             _expandedEconomyHelpRows.Clear();
             _developmentPage = 1;
             _personalizationBannerPicker = false;
@@ -1888,8 +1908,10 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             state.Notice.StartsWith("Потрібно", StringComparison.OrdinalIgnoreCase) ||
             state.Notice.StartsWith("Біржа:", StringComparison.OrdinalIgnoreCase) ||
             state.Notice.StartsWith("Акції недоступні", StringComparison.OrdinalIgnoreCase);
-        _notice.Visible = error;
-        _notice.Text = error ? state.Notice : string.Empty;
+        // Application decisions need explicit feedback, including successful approval.
+        var applicationNotice = state.Notice.StartsWith("Заявку ", StringComparison.OrdinalIgnoreCase);
+        _notice.Visible = error || applicationNotice;
+        _notice.Text = error || applicationNotice ? state.Notice : string.Empty;
         _personalBalance.Text = state.ViewingAnotherCharacter
             ? "Перегляд персонажа"
             : $"Баланс: {state.PersonalBalance:N0} $";
@@ -2124,6 +2146,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         if (isTdf)
             return;
 
+        AddExternalInvestmentPanel(org, details);
+
         if (_state?.Membership == null)
         {
             var join = new Button { Text = org.Pending ? "Заявку подано" : org.IsPrivate ? "Подати заявку" : "Вступити" };
@@ -2133,6 +2157,51 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         }
         else if (_state.Membership == org.Id)
             details.AddChild(new Label { Text = _state.Ownership == org.Id ? "Ви власник організації" : "Ви учасник організації" });
+    }
+
+    private void AddExternalInvestmentPanel(OrganizationEntry org, BoxContainer details)
+    {
+        var toggle = new Button { Text = "Інвестиції", HorizontalAlignment = HAlignment.Right, MinHeight = 32 };
+        var panel = new BoxContainer { Orientation = LayoutOrientation.Vertical, HorizontalExpand = true,
+            SeparationOverride = 4, Visible = false };
+        toggle.OnPressed += _ => panel.Visible = !panel.Visible;
+        details.AddChild(toggle);
+        details.AddChild(panel);
+        panel.AddChild(new Label { Text = $"Зовнішні внески: {org.ExternalInvestmentTotal:N0} $" });
+        if (org.Kind == OrganizationKind.Company)
+            panel.AddChild(new Label { Text = $"Підтримка цільового котирування: +{org.InvestmentDemandPercent}%" });
+        if (!org.InvestorListVisible)
+            panel.AddChild(new Label { Text = "Імена інвесторів приховано." });
+        foreach (var investor in org.ExternalInvestors)
+            panel.AddChild(new Label { Text = WrapText($"{investor.Name}: {investor.Amount:N0} $", 48) });
+        panel.AddChild(new Label { Text = WrapText("Внесок надходить зі свого рахунку до скарбниці. Це не купівля акцій, він не дає права на дивіденди чи повернення.", 48) });
+        var amount = new LineEdit { PlaceHolder = "Сума внеску, $" };
+        var confirm = new Button { Text = "Затвердити внесок", MinHeight = 32,
+            Disabled = org.InsolvencyState != OrganizationInsolvencyState.Active || _state == null || _state.TdfTerminal };
+        var warning = new Label { Text = string.Empty, FontColorOverride = Color.FromHex("#E7A5A5") };
+        var confirmedAmount = -1;
+        confirm.OnPressed += _ =>
+        {
+            var value = ParseAmount(amount);
+            if (value <= 0 || _state == null || value > _state.PersonalBalance)
+            {
+                confirmedAmount = -1;
+                warning.Text = "Некоректна сума або недостатньо коштів.";
+                return;
+            }
+            if (confirmedAmount != value)
+            {
+                confirmedAmount = value;
+                warning.Text = WrapText($"Підтвердіть безповоротний внесок {value:N0} $ до «{org.Name}».", 48);
+                confirm.Text = "Так, переказати кошти";
+                return;
+            }
+            confirm.Disabled = true;
+            ExternalInvestmentRequested?.Invoke(org.Id, value);
+        };
+        panel.AddChild(amount);
+        panel.AddChild(warning);
+        panel.AddChild(confirm);
     }
 
     // Split long company names at natural boundaries, and long single words into chunks.
@@ -2841,51 +2910,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         AddMetric(summaryBody, "Скарбниця", $"{_state.Treasury:N0} $");
         AddMetric(summaryBody, "Початковий капітал", $"{_state.InitialInvestment:N0} $");
         _managementBody.AddChild(summary);
-        if (org.Kind == OrganizationKind.Faction)
-        {
-            var network = BuildFoldout("Підсумки діяльності та архів", out var networkBody, false);
-            AddMetric(networkBody, "Зареєстровано вузлів", _state.FactionNodeCount.ToString(),
-                Color.FromHex("#A4D4B2"));
-            AddMetric(networkBody, "Зареєстровано досліджень", _state.FactionFindingCount.ToString(),
-                Color.FromHex("#A4D4B2"));
-            AddMetric(networkBody, "Авторитет фракції", _state.FactionAuthorityPoints.ToString());
-            AddMetric(networkBody, "Вплив у секторі", $"{org.InfluencePercent:0.00}%", Color.FromHex("#A4D4B2"));
-            AddMetric(networkBody, "Частка зареєстрованої мережі",
-                $"{_state.FactionNetworkSharePercent:0.0}%", Color.FromHex("#A4D4B2"));
-            AddMetric(networkBody, "Затримка між завданнями",
-                _state.FactionAuthorityPoints >= 50 ? "2 хв" :
-                _state.FactionAuthorityPoints >= 20 ? "3 хв" : "4 хв");
-            AddMetric(networkBody, "Завершено завдань", _state.FactionOperationsCompleted.ToString());
-            AddMetric(networkBody, "Стабілізація на ділянці",
-                $"{_state.FactionSignalSeconds} с (основа — 40 с)", Color.FromHex("#A4D4B2"));
-            foreach (var node in _state.FactionNodes)
-            {
-                var site = string.IsNullOrWhiteSpace(node.SiteCode)
-                    ? "історичний запис" : node.SiteCode;
-                AddMetric(networkBody, OrganizationFactionNodeRules.Name(node.Kind),
-                    $"{site} — {node.EstablishedUtc:dd.MM.yyyy} — " +
-                    (node.ActiveThisRound ? "антена присутня у цій зміні" : "архів / неактивний"),
-                    node.ActiveThisRound ? Color.FromHex("#A4D4B2") : Color.FromHex("#B8C7D5"));
-                if (node.ActiveThisRound && !string.IsNullOrEmpty(node.RoundLocation))
-                    AddMetric(networkBody, "Поточне розташування", node.RoundLocation);
-            }
-            foreach (var finding in _state.FactionFindings)
-            {
-                AddMetric(networkBody, "Архів: " + finding.SiteCode,
-                    $"{finding.SiteName} — {finding.RecordedUtc:dd.MM.yyyy}",
-                    Color.FromHex("#AAC7D6"));
-            }
-            networkBody.AddChild(new Label
-            {
-                Text = "Секторна присутність зростає від фактично завершених завдань і програм розвитку. Частка ретрансляторів відображається окремо. Авторитет відкриває нові рівні програм і скорочує відновлення між завданнями.",
-                FontColorOverride = Color.FromHex("#9DB7C8")
-            });
-            _managementBody.AddChild(network);
-        }
-        if (org.Kind == OrganizationKind.Faction)
-            _managementBody.AddChild(BuildFactionProgressPanel(org));
-        // Corporate outpost ownership and rental controls are exclusive to "Активи".
-        if (HasRight(OrganizationPermission.Settings))
+        // Both factions and companies use exactly the same personalization controls.
+        if (!_state!.ViewingAnotherCharacter && HasRight(OrganizationPermission.Settings))
         {
             var personal = BuildFoldout("Персоналізація", out var personalBody,
                 _personalizationExpanded, expanded => _personalizationExpanded = expanded);
@@ -2934,13 +2960,14 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             personalBody.AddChild(new Label { Text = "Вступний внесок" });
             personalBody.AddChild(fee);
             personalBody.AddChild(isPrivate);
-            if (!org.IsPrivate)
-                personalBody.AddChild(new Label
-                {
-                    Text = "Приватний вступ: одноразова оплата 75 000 $ з особистого рахунку власника, " +
-                           "якщо опція ще не була придбана. Повторної оплати немає.",
-                    FontColorOverride = Color.FromHex("#E1BD88")
-                });
+            var purchased = _state.PrivateAccessPurchased || org.IsPrivate;
+            personalBody.AddChild(new Label
+            {
+                Text = purchased ? "Приватний вступ: придбано" : $"Одноразово: {OrganizationPrivateEntryRules.Price:N0} $",
+                FontColorOverride = Color.FromHex(purchased ? "#91CBA2" : "#E1BD88")
+            });
+            if (!purchased)
+                isPrivate.ToolTip = "Оплачується з особистого рахунку власника лише один раз.";
             personalBody.AddChild(publicRoster);
             var bannerLine = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
                 SeparationOverride = 10, HorizontalExpand = true };
@@ -2962,17 +2989,22 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             };
             bannerLine.AddChild(logo);
             personalBody.AddChild(bannerLine);
-            _personalizationBannerStatus = new Label { Text = _personalizationBannerStatusText };
+            _personalizationBannerStatus = new Label { Text = WrapText(_personalizationBannerStatusText, 36) };
             personalBody.AddChild(_personalizationBannerStatus);
             var savePersonal = new Button { Text = "Зберегти персоналізацію", MinHeight = 34 };
             var confirmPrivatePurchase = false;
+            isPrivate.OnToggled += _ =>
+            {
+                confirmPrivatePurchase = false;
+                savePersonal.Text = "Зберегти персоналізацію";
+            };
             savePersonal.OnPressed += _ =>
             {
                 // Prevent an accidental paid upgrade with a single click.
-                if (isPrivate.Pressed && !org.IsPrivate && !confirmPrivatePurchase)
+                if (OrganizationPrivateEntryRules.RequiresPurchase(isPrivate.Pressed, purchased) && !confirmPrivatePurchase)
                 {
                     confirmPrivatePurchase = true;
-                    savePersonal.Text = "Підтвердити приватний вступ";
+                    savePersonal.Text = $"Підтвердити {OrganizationPrivateEntryRules.Price:N0} $";
                     return;
                 }
                 ConfigureRequested?.Invoke(org.Id, isPrivate.Pressed,
@@ -2983,6 +3015,49 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             personalBody.AddChild(savePersonal);
             _managementBody.AddChild(personal);
         }
+        if (org.Kind == OrganizationKind.Faction)
+        {
+            var network = BuildFoldout("Підсумки діяльності та архів", out var networkBody, false);
+            AddMetric(networkBody, "Зареєстровано вузлів", _state.FactionNodeCount.ToString(),
+                Color.FromHex("#A4D4B2"));
+            AddMetric(networkBody, "Зареєстровано досліджень", _state.FactionFindingCount.ToString(),
+                Color.FromHex("#A4D4B2"));
+            AddMetric(networkBody, "Авторитет фракції", _state.FactionAuthorityPoints.ToString());
+            AddMetric(networkBody, "Вплив у секторі", $"{org.InfluencePercent:0.00}%", Color.FromHex("#A4D4B2"));
+            AddMetric(networkBody, "Частка зареєстрованої мережі",
+                $"{_state.FactionNetworkSharePercent:0.0}%", Color.FromHex("#A4D4B2"));
+            AddMetric(networkBody, "Затримка між завданнями",
+                _state.FactionAuthorityPoints >= 50 ? "2 хв" :
+                _state.FactionAuthorityPoints >= 20 ? "3 хв" : "4 хв");
+            AddMetric(networkBody, "Завершено завдань", _state.FactionOperationsCompleted.ToString());
+            AddMetric(networkBody, "Стабілізація на ділянці",
+                $"{_state.FactionSignalSeconds} с (основа — 40 с)", Color.FromHex("#A4D4B2"));
+            foreach (var node in _state.FactionNodes)
+            {
+                var site = string.IsNullOrWhiteSpace(node.SiteCode)
+                    ? "історичний запис" : node.SiteCode;
+                AddMetric(networkBody, OrganizationFactionNodeRules.Name(node.Kind),
+                    $"{site} — {node.EstablishedUtc:dd.MM.yyyy} — " +
+                    (node.ActiveThisRound ? "антена присутня у цій зміні" : "архів / неактивний"),
+                    node.ActiveThisRound ? Color.FromHex("#A4D4B2") : Color.FromHex("#B8C7D5"));
+                if (node.ActiveThisRound && !string.IsNullOrEmpty(node.RoundLocation))
+                    AddMetric(networkBody, "Поточне розташування", WrapText(node.RoundLocation, 26));
+            }
+            foreach (var finding in _state.FactionFindings)
+            {
+                AddMetric(networkBody, "Архів: " + finding.SiteCode,
+                    $"{finding.SiteName} — {finding.RecordedUtc:dd.MM.yyyy}",
+                    Color.FromHex("#AAC7D6"));
+            }
+            networkBody.AddChild(new Label
+            {
+                Text = WrapText("Секторна присутність зростає від фактично завершених завдань і програм розвитку. Частка ретрансляторів відображається окремо. Авторитет відкриває нові рівні програм і скорочує відновлення між завданнями.", 40),
+                FontColorOverride = Color.FromHex("#9DB7C8")
+            });
+            _managementBody.AddChild(network);
+        }
+        if (org.Kind == OrganizationKind.Faction)
+            _managementBody.AddChild(BuildFactionProgressPanel(org));
         if (org.InsolvencyState != OrganizationInsolvencyState.Active)
         {
             var administration = BuildTitledPanel("Фінансовий стан", out var administrationBody);
@@ -3081,7 +3156,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 "Виручка компанії за весь час");
             AddEconomyRow(economyBody, "Загальні витрати", $"{_state.OperatingCosts:N0} $",
                 "Витрати компанії за весь час");
+            AddPassiveMarketProgramControls(org, economyBody);
             _managementBody.AddChild(economyPanel);
+            _managementBody.AddChild(BuildInvestmentOverview(org));
 
             var progression = BuildFoldout("Прогрес компанії", out var levelBody,
                 _developmentExpanded, expanded => _developmentExpanded = expanded);
@@ -3282,6 +3359,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             _managementBody.AddChild(progression);
         }
 
+        if (org.Kind == OrganizationKind.Faction)
+            _managementBody.AddChild(BuildInvestmentOverview(org));
+
         if (_state.Role != OrganizationMemberRole.Owner)
         {
             var leave = new Button { Text = _leaveConfirmation ? "Підтвердити вихід" : "Залишити організацію",
@@ -3398,12 +3478,13 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             investmentsBody.AddChild(new Label { Text = "Програма, яку фінансуємо" });
             investmentsBody.AddChild(new Label
             {
-                Text = "Кошти спрямовуються на обраний напрям розвитку ринку. Для постійних покращень відділів відкрийте «Огляд → Прогрес компанії».",
+                Text = WrapText("Кошти спрямовуються на обраний напрям розвитку ринку. Для постійних покращень відділів відкрийте «Огляд → Прогрес компанії».", 40),
                 FontColorOverride = Color.FromHex("#98ADBE")
             });
             investmentsBody.AddChild(focus);
 
-            var money = new LineEdit { Text = "5000", PlaceHolder = "Бюджет інвестиції, $" };
+            investmentsBody.AddChild(new Label { Text = WrapText("Від 50 000 $ за 0,01% секторного або від 20 000 $ за 0,01% галузевого впливу. Ціна зростає з часткою ринку. Ліміт — наявні кошти скарбниці.", 40) });
+            var money = new LineEdit { Text = "100000", PlaceHolder = "Бюджет інвестиції, $" };
             investmentsBody.AddChild(money);
             var invest = new Button { Text = "Інвестувати зі скарбниці", MinHeight = 34 };
             invest.OnPressed += _ =>
@@ -3718,8 +3799,10 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             var row = new BoxContainer { Orientation = LayoutOrientation.Horizontal, HorizontalExpand = true, SeparationOverride = 5 };
             row.AddChild(new Label { Text = $"{application.Name}: внесок {application.Fee}", HorizontalExpand = true });
             var id = application.Id;
-            var accept = new Button { Text = "Прийняти" };
-            var decline = new Button { Text = "Відмовити" };
+            var accept = new Button { Text = "Затвердити",
+                Disabled = _state.ViewingAnotherCharacter,
+                ToolTip = application.Fee > 0 ? "Для списання внеску заявник має бути у грі своїм персонажем." : "Безкоштовний вступ можна затвердити й за відсутності заявника." };
+            var decline = new Button { Text = "Відмовити", Disabled = _state.ViewingAnotherCharacter };
             accept.OnPressed += _ => ReviewRequested?.Invoke(id, true);
             decline.OnPressed += _ => ReviewRequested?.Invoke(id, false);
             row.AddChild(accept);
@@ -4060,9 +4143,9 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
                 fleetBody.AddChild(returnFleet);
             }
             else
-                fleetBody.AddChild(new Label { Text = _state.FleetShuttlePresent
+                fleetBody.AddChild(new Label { Text = WrapText(_state.FleetShuttlePresent
                         ? "Повернути оренду може лише орендар, на якого зареєстровано шатл."
-                        : "Повторно орендувати цей шатл можна лише в наступному раунді.",
+                        : "Повторно орендувати цей шатл можна лише в наступному раунді.", 40),
                     FontColorOverride = Color.FromHex("#A8B8C7") });
         }
         else if (_state.FleetBlueprintReady && _state.FleetListingApproved &&
@@ -4564,95 +4647,6 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         _sharesBody.AddChild(shareholders);
     }
 
-    private void RefreshTdf()
-    {
-        Clear(_tdfBody);
-        if (_state == null || !_state.TdfAuthorized)
-        {
-            _tdfBody.AddChild(new Label { Text = "Ринковий нагляд доступний тільки уповноваженим службовцям TDF на службовому терміналі." });
-            return;
-        }
-
-        _tdfBody.AddChild(new Label
-        {
-            Text = WrapText("Позначка біржової системи не доводить провину. Тут фіксується розгляд фінансових сигналів. " +
-                "Направлення справи не оголошує персонажа в розшук й не блокує його рахунки."),
-            FontColorOverride = Color.FromHex("#B6C6CF")
-        });
-        var active = BuildFoldout("Справи ринкового нагляду", out var caseBody, true);
-        _tdfBody.AddChild(active);
-        if (_state.TdfCases.Length == 0)
-            caseBody.AddChild(new Label { Text = "Справ поки немає." });
-
-        foreach (var docket in _state.TdfCases)
-        {
-            var status = docket.Status switch
-            {
-                OrganizationTdfCaseStatus.Open => "Відкрита",
-                OrganizationTdfCaseStatus.Cleared => "Закрита: порушення не підтверджено",
-                _ => "Передана на розгляд"
-            };
-            var foldout = BuildFoldout(status + ": " + docket.Company, out var details);
-            AddMetric(details, "Відкрито", docket.CreatedUtc.ToString("yyyy-MM-dd HH:mm") + " UTC");
-            AddMetric(details, "Учасник / джерело", docket.Subject);
-            details.AddChild(new Label { Text = WrapText(docket.Reason, 54) });
-            if (!string.IsNullOrWhiteSpace(docket.LastOfficer))
-                AddMetric(details, "Останнє рішення ухвалив", docket.LastOfficer);
-            if (!string.IsNullOrWhiteSpace(docket.DecisionNote))
-                details.AddChild(new Label { Text = WrapText(docket.DecisionNote, 54) });
-            if (docket.History.Length > 0)
-            {
-                var historyPanel = BuildFoldout("Історія рішень", out var historyBody);
-                foreach (var historyLine in docket.History)
-                    historyBody.AddChild(new Label { Text = WrapText(historyLine, 54) });
-                details.AddChild(historyPanel);
-            }
-
-            if (_state.TdfCanResolveCases && docket.Status == OrganizationTdfCaseStatus.Open)
-            {
-                var note = new LineEdit { PlaceHolder = "Обґрунтування рішення (5–220 символів)", HorizontalExpand = true };
-                details.AddChild(note);
-                var actions = new BoxContainer { Orientation = LayoutOrientation.Horizontal, HorizontalExpand = true, SeparationOverride = 5 };
-                var clear = new Button { Text = "Закрити без порушення", HorizontalExpand = true,
-                    ToolTip = "Зняти підозру за підсумками перевірки" };
-                var refer = new Button { Text = "Передати на розгляд", HorizontalExpand = true,
-                    ToolTip = "Документально направити матеріали, не накладаючи покарання" };
-                clear.OnPressed += _ => TdfResolveCaseRequested?.Invoke(docket.Id, OrganizationTdfCaseStatus.Cleared, note.Text.Trim());
-                refer.OnPressed += _ => TdfResolveCaseRequested?.Invoke(docket.Id, OrganizationTdfCaseStatus.Referred, note.Text.Trim());
-                actions.AddChild(clear);
-                actions.AddChild(refer);
-                details.AddChild(actions);
-            }
-            caseBody.AddChild(foldout);
-        }
-
-        var ledger = BuildFoldout("Сигнали й біржові угоди", out var ledgerBody, true);
-        _tdfBody.AddChild(ledger);
-        foreach (var alert in _state.TdfAlerts)
-        {
-            var entry = BuildFoldout((alert.Flagged ? "⚠ Сигнал" : "Угода") + ": " + alert.Company, out var body);
-            AddMetric(body, "Дата UTC", alert.Utc.ToString("yyyy-MM-dd HH:mm"));
-            AddMetric(body, "Учасник", alert.Actor);
-            body.AddChild(new Label { Text = WrapText(alert.Description, 54) });
-            if (alert.Flagged && !string.IsNullOrEmpty(alert.SourceKey))
-            {
-                var exists = _state.TdfCases.Any(c => c.Id != Guid.Empty &&
-                    c.SourceKey == alert.SourceKey);
-                // Duplicate case prevention is enforced by the server, including older evidence.
-                if (!exists)
-                {
-                    var open = new Button { Text = "Відкрити перевірку", MinHeight = 30 };
-                    open.OnPressed += _ => TdfOpenCaseRequested?.Invoke(alert.SourceKey);
-                    body.AddChild(open);
-                }
-                else body.AddChild(new Label { Text = "Перевірку вже зареєстровано." });
-            }
-            ledgerBody.AddChild(entry);
-        }
-        if (_state.TdfAlerts.Length == 0)
-            ledgerBody.AddChild(new Label { Text = "Операцій ще немає." });
-    }
-
     private void RefreshSideBudget()
     {
         Clear(_budgetSide);
@@ -4959,6 +4953,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         rules.SeparationOverride = 5;
         rules.AddChild(_private);
         rules.AddChild(_rosterPublic);
+        rules.AddChild(_investorsPublic);
         rules.AddChild(_entryFeeEnabled);
         _fee.MinHeight = 30;
         rules.AddChild(_fee);
@@ -5009,6 +5004,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             privateParent.RemoveChild(_private);
         if (_rosterPublic.Parent is BoxContainer rosterParent)
             rosterParent.RemoveChild(_rosterPublic);
+        if (_investorsPublic.Parent is BoxContainer investorsParent)
+            investorsParent.RemoveChild(_investorsPublic);
         if (_investment.Parent is BoxContainer investmentParent)
             investmentParent.RemoveChild(_investment);
         if (_creationError.Parent is BoxContainer errorParent)

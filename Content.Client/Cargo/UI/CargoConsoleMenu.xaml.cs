@@ -1,3 +1,4 @@
+using Content.Shared._Aspis.Organizations;
 using System.Linq;
 using Content.Client.UserInterface.Controls;
 using Content.Shared._NF.Bank;
@@ -68,6 +69,8 @@ namespace Content.Client.Cargo.UI
                 foreach (var cargoPrototype in _protoManager.EnumeratePrototypes<CargoProductPrototype>())
                 {
                     if (!allowedGroups?.Contains(cargoPrototype.Group) ?? false)
+                        continue;
+                    if (!OrganizationCargoCatalogRules.IsAvailable(cargoPrototype.ID, cargoPrototype.Product.Id, cargoPrototype.Name))
                         continue;
 
                     yield return cargoPrototype;

@@ -366,7 +366,7 @@ public sealed partial class OrganizationSystem
                 _organizationMetadata.SetEntityName(recorder, $"Аварійний реєстратор {claim.FactionSiteCode}");
                 // Private expedition: the shared shuttle FTL gate checks the
                 // physical disk; Aspis additionally checks its assignment and
-                // that departure originates near Trade Mall.
+                // that departure originates near Auric Trade Center.
                 if (!_organizationShuttle.TryAddFTLDestination(mapId, true, true,
                         false, out _))
                 {
@@ -711,7 +711,7 @@ public sealed partial class OrganizationSystem
         _audio.PlayPvs(QuotaManifestPrinterSound, actor);
         _quotaPopup.PopupEntity($"КПК надрукував диск {claim.FactionSiteCode} для " +
             (claim.FactionPlanetMap != null ? "планети" : "космічного об'єкта") +
-            ". Вставте його в FTL-консоль. Виліт — із району Trade Mall.", actor, actor);
+            ". Вставте його в FTL-консоль. Виліт — із району Auric Trade Center.", actor, actor);
         _adminLog.Add(LogType.Action, LogImpact.Low,
             $"Faction coordinates issued: {claim.Code}, org={org.Id}");
     }

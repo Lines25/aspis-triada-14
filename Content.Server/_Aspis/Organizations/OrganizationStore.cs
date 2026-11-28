@@ -84,6 +84,8 @@ public sealed class OrganizationDividendAccountRecord
 
 public sealed class OrganizationConcentrationRecord
 {
+    public string Operation { get; set; } = string.Empty;
+    public int Gross { get; set; }
     public DateTime Utc { get; set; }
     public Guid Organization { get; set; }
     public string Company { get; set; } = string.Empty;
@@ -224,6 +226,14 @@ public sealed class OrganizationFactionFindingRecord
     public DateTime RecordedUtc { get; set; }
 }
 
+public sealed class OrganizationExternalInvestorRecord
+{
+    public string UserId { get; set; } = string.Empty;
+    public int Slot { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public long Amount { get; set; }
+}
+
 public sealed class OrganizationRecord
 {
     public Guid Id { get; set; }
@@ -241,6 +251,8 @@ public sealed class OrganizationRecord
     public bool IsPrivate { get; set; }
     public bool PrivateAccessPurchased { get; set; }
     public bool RosterPublic { get; set; } = true;
+    public bool InvestorsPublic { get; set; }
+    public List<OrganizationExternalInvestorRecord> ExternalInvestors { get; set; } = new();
     public int PayrollPerMember { get; set; }
     public bool PayrollAutomatic { get; set; }
     public int PayrollProfitPercent { get; set; } = 30;
@@ -321,6 +333,8 @@ public sealed class OrganizationRecord
     public int CompanyLevel { get; set; } = 1;
     public int CompanyExperience { get; set; }
     public OrganizationOperatingPolicy OperatingPolicy { get; set; } = OrganizationOperatingPolicy.Balanced;
+    public OrganizationMarketProgram MarketProgram { get; set; }
+    public int MarketProgramCycles { get; set; }
     public int LastCycleGross { get; set; }
     public int LastCycleCosts { get; set; }
     public int LastCycleNet { get; set; }

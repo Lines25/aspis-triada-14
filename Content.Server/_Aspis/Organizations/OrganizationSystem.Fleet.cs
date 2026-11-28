@@ -200,6 +200,7 @@ public sealed partial class OrganizationSystem
             }
             EnsureComp<PhysicsComponent>(grid);
             EnsureComp<IFFComponent>(grid);
+            _organizationFleetShipyard.PrepareCorporateLoadedGrid(grid);
             // A saved manifest must not import a previous owner's offline
             // auto-cleanup timer into an organization-owned rental.
             if (HasComp<ShipOwnershipComponent>(grid))
@@ -229,6 +230,7 @@ public sealed partial class OrganizationSystem
             }
             var marker = EnsureComp<OrganizationFleetShuttleComponent>(grid);
             marker.OrganizationId = org.Id;
+            RestoreOutpostCompanySecurity(org.Id, grid);
             // The staging map is now EMPTY: the shuttle was transferred to the
             // station's shared sector map by TryFTLDock. Never expose its empty
             // map as an FTL destination and never delete the station map.

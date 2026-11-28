@@ -11,6 +11,14 @@ namespace Content.Server._NF.Shipyard.Systems;
 /// </summary>
 public sealed partial class ShipyardSystem
 {
+    // Use the stock saved-ship preparation steps for corporate templates too.
+    public void PrepareCorporateLoadedGrid(EntityUid grid)
+    {
+        TryResetUseDelays(grid);
+        _shipyardGridSave.CreateSpawnOnShipLoadEntities(grid);
+        PurgeJointsAndResetDocks(grid);
+    }
+
     public bool TryRegisterCorporateRentalDeed(EntityUid card, EntityUid grid,
         string shuttleName, string renterName)
     {

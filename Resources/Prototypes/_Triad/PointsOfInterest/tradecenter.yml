@@ -41,5 +41,6 @@
         mapNameTemplate: 'Auric Trade Center'
       - type: StationDeadDrop
         maxDeadDrops: 3
+      - type: OrganizationTradeHub
       - type: TradeCrateDestination
         destinationProto: Trade

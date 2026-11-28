@@ -19021,6 +19021,17 @@ entities:
       powerLoad: 5
     - type: Battery
       startingCharge: 0
+- proto: ComputerOrganizationRegistry
+  entities:
+  - uid: 7220
+    components:
+    - type: Transform
+      parent: 1
+      pos: 0.5,5.5
+    - type: ApcPowerReceiver
+      powerLoad: 5
+    - type: Battery
+      startingCharge: 0
 - proto: ComputerPalletConsoleNFHighMarket
   entities:
   - uid: 1779
@@ -36760,11 +36771,6 @@ entities:
     - type: Transform
       parent: 1
       pos: 0.5,-4.5
-  - uid: 2968
-    components:
-    - type: Transform
-      parent: 1
-      pos: 0.5,5.5
   - uid: 2969
     components:
     - type: Transform

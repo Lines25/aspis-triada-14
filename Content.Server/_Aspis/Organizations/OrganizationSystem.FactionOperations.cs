@@ -253,7 +253,7 @@ public sealed partial class OrganizationSystem
 
     private string FactionStageName(SectorQuotaClaim? claim, Organization org) => claim?.FactionStage switch
     {
-        null or 0 => "Надрукуйте накладну в КПК, отримайте польовий комплект через Trade Mall",
+        null or 0 => "Надрукуйте накладну в КПК, отримайте польовий комплект через Auric Trade Center",
         1 when claim is { FactionSurveyBeacon: { } beacon } &&
             FactionSurveyBeaconMatches(claim, beacon) =>
             "Використайте польовий комплект на встановленому орієнтирі",

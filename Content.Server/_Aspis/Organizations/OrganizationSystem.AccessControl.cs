@@ -108,7 +108,8 @@ public sealed partial class OrganizationSystem
     private void OnOrganizationPropertyReaderCheck(EntityUid uid, OrganizationPropertyAccessReaderComponent reader,
         OrganizationPropertyAccessCheckEvent args)
     {
-        args.Authorized = HasAnyMatchingCorporatePermission(args.User, uid, reader);
+        args.Authorized = IsOnOwnedProperty(uid, reader.Organization) &&
+            HasAnyMatchingCorporatePermission(args.User, uid, reader);
     }
 
     private void OnOrganizationPropertyReaderConfigured(EntityUid uid, AccessReaderComponent component, InteractUsingEvent args)

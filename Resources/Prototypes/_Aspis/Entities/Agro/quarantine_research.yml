@@ -37,7 +37,7 @@
   - type: Item
     size: Small
   - type: StaticPrice
-    price: 1
+    price: 25000
   - type: AspisAgroQuarantineSample
 
 - type: entity
@@ -78,7 +78,7 @@
   - type: Item
     size: Small
   - type: StaticPrice
-    price: 1
+    price: 25000
   - type: AspisAgroQuarantineSample
 
 - type: entity
@@ -119,7 +119,7 @@
   - type: Item
     size: Small
   - type: StaticPrice
-    price: 1
+    price: 25000
   - type: AspisAgroQuarantineSample
 
 - type: entity
@@ -160,7 +160,7 @@
   - type: Item
     size: Small
   - type: StaticPrice
-    price: 1
+    price: 25000
   - type: AspisAgroQuarantineSample
 
 - type: entity
@@ -201,7 +201,7 @@
   - type: Item
     size: Small
   - type: StaticPrice
-    price: 1
+    price: 25000
   - type: AspisAgroQuarantineSample
 
 - type: entity
@@ -242,6 +242,6 @@
   - type: Item
     size: Small
   - type: StaticPrice
-    price: 1
+    price: 25000
   - type: AspisAgroQuarantineSample
 

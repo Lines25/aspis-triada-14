@@ -101,6 +101,9 @@ public sealed partial class OrganizationSystem
             args.Price is < 1 or > MaxQuote)
             return;
 
+        if (args.Side == OrganizationLimitOrderSide.Buy && !RequireInvestmentPlaytime(uid, actor))
+            return;
+
         var amount = (long)args.Quantity * args.Price;
         if (amount > int.MaxValue || company.MarketOrders.Count >= MaxLimitOrders ||
             (FindMarketWallet(company, key) == null && company.MarketCash.Count >= MaxMarketCashAccounts) ||
@@ -280,13 +283,15 @@ public sealed partial class OrganizationSystem
 
             // A trade is a transfer of ownership, not a corporate sale or dividend.
             // One thinly traded package must not reset the entire price curve.
+            var quoteBefore = company.Quote;
             var step = Math.Max(1, company.Quote / 20);
             company.Quote = Math.Clamp(price,
                 Math.Max(1, company.Quote - step), Math.Min(MaxQuote, company.Quote + step));
             company.PriceHistory.Add(company.Quote);
             if (company.PriceHistory.Count > MaxPriceHistory)
                 company.PriceHistory.RemoveAt(0);
-            var alert = quantity * 100L >= company.SharesIssued * 5L || proceeds >= 5_000;
+            var reason = ClassifyMatchedTrade(company, ask, bid, quantity, price, proceeds, quoteBefore);
+            var alert = reason.Length > 0;
             flagged |= alert;
             _tradeLedger.Add(new OrganizationTradeRecord
             {
@@ -295,7 +300,7 @@ public sealed partial class OrganizationSystem
                 CounterpartyUserId = bid.UserId, CounterpartySlot = bid.Slot,
                 CounterpartyName = bid.Name,
                 Order = OrganizationStockOrder.Sell, Quantity = quantity, Price = price, Total = proceeds,
-                Flagged = alert, Reason = alert ? "Велика угода між акціонерами" : string.Empty
+                Flagged = alert, Reason = reason
             });
             if (_tradeLedger.Count > MaxTradeLedger)
             {

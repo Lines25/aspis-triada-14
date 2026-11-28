@@ -80,6 +80,14 @@ public sealed partial class PowerChargeSystem : EntitySystem
 
         UpdatePowerState(ent, powerReceiver);
         UpdateState((ent, ent.Comp, powerReceiver));
+        // A saved active generator does not cross the activation threshold again.
+        // Rebuild its transient gravity state without giving an uncharged machine power.
+        if (ent.Comp.Active && ent.Comp.Intact && ent.Comp.Charge > 0 &&
+            HasComp<Content.Server.Gravity.GravityGeneratorComponent>(ent.Owner))
+        {
+            var activated = new ChargedMachineActivatedEvent();
+            RaiseLocalEvent(ent.Owner, ref activated);
+        }
     }
 
     private void SetSwitchedOn(EntityUid uid, PowerChargeComponent component, bool on,

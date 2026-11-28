@@ -173,7 +173,7 @@ public sealed partial class OrganizationSystem
         _organizationMetadata.SetEntityName(item, $"Маршрут: {claim.Code}");
         _hands.TryPickupAnyHand(actor, item);
         _quotaPopup.PopupEntity($"Видано маршрутний модуль. Замовте {claim.Units} ящиків " +
-            "партіями до 20 через Cargo Requests. Завантажте все на один шатл. " +
+            "через Cargo Requests: схваліть першу партію, наступні надійдуть автоматично. Завантажте все на один шатл. " +
             "Після отримання допуску запускайте маршрут із кабіни.", actor, actor);
     }
 
@@ -694,7 +694,7 @@ public sealed partial class OrganizationSystem
         while (sectorGrids.MoveNext(out var gridUid, out _, out var gridTransform))
         {
             if (gridTransform.MapID != map ||
-                !MetaData(gridUid).EntityName.Contains("Trade Mall", StringComparison.OrdinalIgnoreCase))
+                !_quotaCargoSystem.IsQuotaTradeHub(gridUid))
                 continue;
             if (Vector2.DistanceSquared(pos, gridTransform.WorldPosition) > 200f * 200f)
                 continue;
@@ -703,7 +703,7 @@ public sealed partial class OrganizationSystem
         }
         if (!nearDispatch)
         {
-            reason = "Захищений маршрут запускається тільки біля вантажного термінала Trade Mall.";
+            reason = "Захищений маршрут запускається тільки біля вантажного термінала Auric Trade Center.";
             return false;
         }
         var now = _gameTiming.CurTime;
@@ -893,7 +893,7 @@ public sealed partial class OrganizationSystem
             return false;
         }
         // Only a detached, physics-enabled civilian craft can enter the
-        // corridor. NEVER relocate a static station, Trade Mall or a yard.
+        // corridor. NEVER relocate a static station, Auric Trade Center or a yard.
         if (!TryComp<PhysicsComponent>(ship, out var sourceBody) ||
             (sourceBody.BodyType & BodyType.Dynamic) == 0 ||
             HasComp<OrganizationConstructionYardProtectedGridComponent>(ship) ||
