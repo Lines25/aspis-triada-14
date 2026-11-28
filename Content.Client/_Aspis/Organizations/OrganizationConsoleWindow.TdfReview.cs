@@ -68,9 +68,9 @@ public sealed partial class OrganizationConsoleWindow
 
     private static string TdfSeverityLabel(string reason) => TdfSeverity(reason) switch
     {
-        3 => "III / Ознаки узгоджених торгів",
+        3 => "III / Високий пріоритет",
         2 => "II / Потрібна перевірка",
-        1 => "I / Незвичний обсяг",
+        1 => "I / Спостереження",
         _ => "Потрібна перевірка"
     };
 

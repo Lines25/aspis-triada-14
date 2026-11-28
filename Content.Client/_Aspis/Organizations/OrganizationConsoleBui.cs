@@ -103,6 +103,8 @@ public sealed class OrganizationConsoleBui(EntityUid owner, Enum uiKey) : BoundU
         _window.SetTitleRequested += (org, slot, title) => SendMessage(new OrganizationSetTitleMessage(org, slot, title));
         _window.SetMemberTitleRequested += (org, member, title) =>
             SendMessage(new OrganizationSetMemberTitleMessage(org, member, title));
+        _window.MarketProgramRequested += (id, program) => SendMessage(new OrganizationMarketProgramMessage(id, program));
+        _window.InvestorPrivacyRequested += (id, visible) => SendMessage(new OrganizationInvestorPrivacyMessage(id, visible));
         _window.SetOperatingPolicyRequested += (id, policy) =>
             SendMessage(new OrganizationSetOperatingPolicyMessage(id, policy));
         _window.ConfigureBudgetRequested += (org, a, b, c, d) =>

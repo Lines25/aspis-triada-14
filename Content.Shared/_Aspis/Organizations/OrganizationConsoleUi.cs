@@ -202,6 +202,8 @@ public sealed class OrganizationEntry(
     public bool RosterPublic = true;
     public bool InvestorsPublic;
     public long ExternalInvestmentTotal;
+    public int ExternalInvestorCount;
+    public bool InvestorListVisible;
     public OrganizationInvestorEntry[] ExternalInvestors = [];
     public int InvestmentDemandPercent;
     public int EntryFee = entryFee;
@@ -532,6 +534,8 @@ public sealed class OrganizationConsoleState(
     public bool CanClaimLeadership;
     public int OnlineMembers;
     public OrganizationOperatingPolicy OperatingPolicy;
+    public OrganizationMarketProgram MarketProgram;
+    public int MarketProgramCycles;
     public OrganizationPermission UserPermissions;
     public OrganizationPermission DeputyPermissions;
     public OrganizationPermission OfficerPermissions;

@@ -1880,6 +1880,7 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
             _assetsBranchesInfo = false;
             _developmentExpanded = false;
             _economyExpanded = false;
+            ResetInvestmentOverview();
             _expandedEconomyHelpRows.Clear();
             _developmentPage = 1;
             _personalizationBannerPicker = false;
@@ -3134,7 +3135,9 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
                 "Виручка компанії за весь час");
             AddEconomyRow(economyBody, "Загальні витрати", $"{_state.OperatingCosts:N0} $",
                 "Витрати компанії за весь час");
+            AddPassiveMarketProgramControls(org, economyBody);
             _managementBody.AddChild(economyPanel);
+            _managementBody.AddChild(BuildInvestmentOverview(org));
 
             var progression = BuildFoldout("Прогрес компанії", out var levelBody,
                 _developmentExpanded, expanded => _developmentExpanded = expanded);
@@ -3334,6 +3337,9 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
             levelBody.AddChild(navigation);
             _managementBody.AddChild(progression);
         }
+
+        if (org.Kind == OrganizationKind.Faction)
+            _managementBody.AddChild(BuildInvestmentOverview(org));
 
         if (_state.Role != OrganizationMemberRole.Owner)
         {

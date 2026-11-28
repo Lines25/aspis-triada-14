@@ -137,7 +137,7 @@ public sealed partial class OrganizationSystem
             }
             organization = concentration.Organization;
             company = concentration.Company;
-            subject = "Секторна антимонопольна служба";
+            subject = string.IsNullOrEmpty(concentration.Operation) ? "Секторна антимонопольна служба" : "Автономна економіка";
             reason = concentration.Reason;
         }
         if (string.IsNullOrWhiteSpace(company) || string.IsNullOrWhiteSpace(subject) || string.IsNullOrWhiteSpace(reason))
