@@ -24,6 +24,8 @@ using Robust.Shared.Map.Components;
 using Robust.Shared.Maths;
 using Robust.Shared.Prototypes;
 using Robust.Shared.Timing;
+using Robust.Shared.Utility;
+using Content.Shared.Parallax.Biomes;
 
 namespace Content.Server._Aspis.Organizations;
 
@@ -60,6 +62,8 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
     [Dependency] private OrganizationSystem _organizations = default!;
     [Dependency] private AspisAgroStationSystem _station = default!;
     [Dependency] private SharedPopupSystem _popup = default!;
+    [Dependency] private SharedMapSystem _maps = default!;
+    [Dependency] private ITileDefinitionManager _tiles = default!;
 
     private static readonly TimeSpan StormDuration = TimeSpan.FromMinutes(45);
     private static readonly TimeSpan SampleDelay = TimeSpan.FromSeconds(40);
@@ -67,6 +71,10 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
     private const int MaxPlayersPerTick = 64;
     private readonly Dictionary<EntityUid, Storm> _storms = new();
     private float _toxicTimer;
+    private float _floraTimer;
+    private readonly Dictionary<string, PendingFlora> _pendingFlora = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _scheduledFlora = new(StringComparer.Ordinal);
+    private sealed record PendingFlora(EntityUid Map, TimeSpan ReadyAt);
     private static readonly string[] FloraNodePrototypes =
     {
         "AspisAgroQuarantineNode01", "AspisAgroQuarantineNode02", "AspisAgroQuarantineNode03",
@@ -83,10 +91,7 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
         public EntityUid AirMap;
         public EntityUid SurfaceMap;
         public string ClaimCode = string.Empty;
-        public TimeSpan Started;
         public TimeSpan Ends;
-        public EntityUid SampleNode;
-        public bool SampleCreated;
         public readonly Dictionary<EntityUid, Lighting> OriginalLight = new();
     }
 
@@ -106,19 +111,12 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
     {
         if (Deleted(surfaceMap) || Deleted(airMap) || string.IsNullOrWhiteSpace(claimCode))
             return;
+        // One deferred specimen per completed spraying, independent of later storms.
+        if (_scheduledFlora.Add(claimCode))
+            _pendingFlora[claimCode] = new PendingFlora(surfaceMap, _timing.CurTime + SampleDelay);
         if (_storms.TryGetValue(surfaceMap, out var old))
         {
-            // Reusing the same shared map must never duplicate weather systems.
-            // A new contract can nevertheless create a NEW salvage sample.
-            if (!string.Equals(old.ClaimCode, claimCode, StringComparison.Ordinal))
-            {
-                if (old.SampleNode.Valid && !Deleted(old.SampleNode))
-                    QueueDel(old.SampleNode);
-                old.ClaimCode = claimCode;
-                old.SampleCreated = false;
-                old.SampleNode = EntityUid.Invalid;
-                old.Started = _timing.CurTime;
-            }
+            old.ClaimCode = claimCode;
             old.Ends = _timing.CurTime + StormDuration;
             if (_prototypes.TryIndex<WeatherPrototype>("AspisAgroAcidRain", out var renewed))
                 _weather.SetWeather(Transform(surfaceMap).MapID, renewed, old.Ends);
@@ -131,7 +129,6 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
             SurfaceMap = surfaceMap,
             AirMap = airMap,
             ClaimCode = claimCode,
-            Started = now,
             Ends = now + StormDuration
         };
         _storms.Add(surfaceMap, storm);
@@ -157,28 +154,13 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
                 _storms.Remove(map);
                 continue;
             }
-            if (!storm.SampleCreated && now - storm.Started >= SampleDelay)
-            {
-                storm.SampleCreated = true;
-                // One specimen per completed spray, hidden in the planetary
-                // wilderness instead of in a predictable fixed location.
-                // The biome streams in only around explorers; this entity stays
-                // on the canonical surface map awaiting discovery.
-                var origin = _station.TryGetStationPosition(map, out var station)
-                    ? station : new Vector2(210f, 88f);
-                var radians = Random.Shared.NextDouble() * Math.Tau;
-                var distance = 180f + (float)Random.Shared.NextDouble() * 240f;
-                var position = origin + new Vector2(
-                    (float)Math.Cos(radians), (float)Math.Sin(radians)) * distance;
-                var variant = Random.Shared.Next(0, FloraNodePrototypes.Length);
-                var node = Spawn(FloraNodePrototypes[variant], new EntityCoordinates(map, position));
-                var component = EnsureComp<AspisAgroQuarantineNodeComponent>(node);
-                component.ClaimCode = storm.ClaimCode;
-                component.SurfaceMap = map;
-                component.SamplePrototype = FloraSamplePrototypes[variant];
-                storm.SampleNode = node;
-                Logger.Info($"Aspis Agro: rare flora node spawned on {map} at {position} for {storm.ClaimCode}.");
-            }
+        }
+
+        _floraTimer += frameTime;
+        if (_floraTimer >= 2f)
+        {
+            _floraTimer = 0f;
+            TrySpawnPendingFlora(now);
         }
 
         if (_storms.Count == 0)
@@ -208,6 +190,78 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
             if (!protectedSuit)
                 damage.DamageDict.Add("Caustic", FixedPoint2.New(2));
             _damage.TryChangeDamage(uid, damage, ignoreResistances: false);
+        }
+    }
+
+    private void TrySpawnPendingFlora(TimeSpan now)
+    {
+        if (_pendingFlora.Count == 0)
+            return;
+
+        // Only search already streamed wilderness around people on the surface.
+        // Never place an entity into an unloaded tile and never force-load a planet.
+        var explorers = new Dictionary<EntityUid, List<Vector2>>();
+        var people = EntityQueryEnumerator<MindContainerComponent, TransformComponent>();
+        while (people.MoveNext(out _, out var mind, out var xform))
+        {
+            if (!mind.HasMind || xform.MapUid is not { } map || xform.GridUid != map)
+                continue;
+            if (!explorers.TryGetValue(map, out var positions))
+                explorers[map] = positions = new List<Vector2>();
+            positions.Add(xform.WorldPosition);
+        }
+
+        foreach (var (code, pending) in _pendingFlora.ToArray())
+        {
+            var map = pending.Map;
+            if (Deleted(map))
+            {
+                _pendingFlora.Remove(code);
+                continue;
+            }
+            if (now < pending.ReadyAt || !explorers.TryGetValue(map, out var positions) ||
+                !TryComp<MapGridComponent>(map, out var grid) || !TryComp<BiomeComponent>(map, out var biome))
+                continue;
+            var station = _station.TryGetStationPosition(map, out var basePosition) ? basePosition : new Vector2(210, 88);
+            var wheat = _tiles["FloorAspisWheat"].TileId;
+            Vector2i? chosen = null;
+            foreach (var origin in positions)
+            {
+                // Keep specimens outside the base and within a short exploration walk.
+                for (var attempt = 0; attempt < 40; attempt++)
+                {
+                    var angle = Random.Shared.NextDouble() * Math.Tau;
+                    var radius = 7f + (float)Random.Shared.NextDouble() * 11f;
+                    var point = origin + new Vector2((float)Math.Cos(angle), (float)Math.Sin(angle)) * radius;
+                    if (Vector2.DistanceSquared(point, station) < 35f * 35f)
+                        continue;
+                    var index = new Vector2i((int)MathF.Floor(point.X), (int)MathF.Floor(point.Y));
+                    if (!_maps.TryGetTileRef(map, grid, index, out var tile) || tile.Tile.IsEmpty ||
+                        tile.Tile.TypeId != wheat)
+                        continue;
+                    chosen = index;
+                    break;
+                }
+                if (chosen != null)
+                    break;
+            }
+            if (chosen is not { } cell)
+                continue;
+            var variant = Random.Shared.Next(FloraNodePrototypes.Length);
+            if (!_prototypes.HasIndex<EntityPrototype>(FloraNodePrototypes[variant]) ||
+                !_prototypes.HasIndex<EntityPrototype>(FloraSamplePrototypes[variant]))
+                continue;
+            // Retain the one supporting tile when the rest of the biome unloads.
+            var chunk = SharedMapSystem.GetChunkIndices(cell, 8) * 8;
+            biome.ModifiedTiles.GetOrNew(chunk).Add(cell);
+            var position = new Vector2(cell.X + 0.5f, cell.Y + 0.5f);
+            var node = Spawn(FloraNodePrototypes[variant], new EntityCoordinates(map, position));
+            var component = EnsureComp<AspisAgroQuarantineNodeComponent>(node);
+            component.ClaimCode = code;
+            component.SurfaceMap = map;
+            component.SamplePrototype = FloraSamplePrototypes[variant];
+            _pendingFlora.Remove(code);
+            Logger.Info($"Aspis Agro: flora spawned on loaded wheat at {position}, map={map}, claim={code}.");
         }
     }
 
@@ -287,6 +341,9 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
             string.IsNullOrWhiteSpace(node.ClaimCode) ||
             Transform(actor).MapUid != node.SurfaceMap)
             return;
+        // Invalidate the physical node before spawning or queuing deletion; two clicks cannot duplicate it.
+        var claim = node.ClaimCode;
+        node.ClaimCode = string.Empty;
         // Exposed crews can make a risky grab; PPE dramatically reduces injury.
         if (!HasBioSuit(actor) || !HasSuppliedMask(actor))
         {
@@ -296,11 +353,9 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
             _popup.PopupEntity("Відкритий контакт: гостре отруєння!", actor, actor);
         }
         var sample = Spawn(string.IsNullOrWhiteSpace(node.SamplePrototype) ? "AspisAgroQuarantineSample01" : node.SamplePrototype, Transform(uid).Coordinates);
-        EnsureComp<AspisAgroQuarantineSampleComponent>(sample).ClaimCode = node.ClaimCode;
+        EnsureComp<AspisAgroQuarantineSampleComponent>(sample).ClaimCode = claim;
         _hands.TryPickupAnyHand(actor, sample);
         QueueDel(uid);
-        if (_storms.TryGetValue(node.SurfaceMap, out var storm) && storm.SampleNode == uid)
-            storm.SampleNode = EntityUid.Invalid;
         _popup.PopupEntity("Диворослину зібрано! Продайте її на вантажній платформі Cargo, щоб компанія отримала грант і вплив.",
             actor, actor);
     }

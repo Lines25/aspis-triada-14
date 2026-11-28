@@ -28,9 +28,18 @@ public sealed partial class CargoSystem
     private const string QuotaTradeCratePrototype = "CrateTradeSecureNormal";
     private readonly Dictionary<CargoOrderData, QuotaOrderAuthorization> _quotaOrders = new();
 
-    private bool IsQuotaTradeMall(EntityUid? grid) =>
-        grid is { Valid: true } id &&
-        MetaData(id).EntityName.Contains("Trade Mall", StringComparison.OrdinalIgnoreCase);
+    private bool IsQuotaTradeMall(EntityUid? grid)
+    {
+        if (grid is not { Valid: true } id || Deleted(id) ||
+            _station.GetOwningStation(id) is not { Valid: true } station ||
+            !TryComp<TradeCrateDestinationComponent>(station, out var destination) ||
+            destination.DestinationProto.Id != "Trade")
+            return false;
+        var name = MetaData(id).EntityName;
+        return string.Equals(name, "Auric Trade Center", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(name, "Auric Trade Mall", StringComparison.OrdinalIgnoreCase) ||
+               string.Equals(name, "Trade Mall", StringComparison.OrdinalIgnoreCase);
+    }
 
     private void ResetQuotaDeliveryRound() => _quotaOrders.Clear();
 

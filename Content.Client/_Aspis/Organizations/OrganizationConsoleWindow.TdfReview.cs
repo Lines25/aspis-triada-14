@@ -51,7 +51,7 @@ public sealed partial class OrganizationConsoleWindow
     {
         OrganizationTdfCaseStatus.Open => "На перевірці",
         OrganizationTdfCaseStatus.Cleared => "Порушень не встановлено",
-        _ => "Передано на розгляд"
+        _ => "Передано на службовий розгляд"
     };
 
     private static int TdfSeverity(string reason) =>
@@ -131,13 +131,19 @@ public sealed partial class OrganizationConsoleWindow
         AddTdfCounter(counters, "Нові сигнали", pending, "#E6B777", TdfReviewFilter.Pending);
         AddTdfCounter(counters, "Відкриті справи", active, "#D9C48B", TdfReviewFilter.Open);
         AddTdfCounter(counters, "Архів справ", archive, "#91CBA2", TdfReviewFilter.Archive);
-        _tdfBody.AddChild(counters);
+        var overview = BuildTitledPanel("Огляд нагляду", out var overviewBody);
+        overview.PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex("#222A31"),
+            BorderColor = Color.FromHex("#45515B"), BorderThickness = new Thickness(1) };
+        overviewBody.AddChild(counters);
+        _tdfBody.AddChild(overview);
 
         var layout = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
             HorizontalExpand = true, VerticalExpand = true, SeparationOverride = 8 };
         var left = BuildTitledPanel("Журнал", out var leftBody, true);
         left.HorizontalExpand = false;
-        left.MinWidth = 300;
+        left.MinWidth = 290;
+        var filterRow = new BoxContainer { Orientation = LayoutOrientation.Horizontal, HorizontalExpand = true, SeparationOverride = 8 };
+        filterRow.AddChild(new Label { Text = "Розділ журналу", FontColorOverride = Color.FromHex("#91A2B0") });
         var filter = new OptionButton { HorizontalExpand = true, MinHeight = 32 };
         filter.AddItem("Нові сигнали", (int)TdfReviewFilter.Pending);
         filter.AddItem("Відкриті справи", (int)TdfReviewFilter.Open);
@@ -145,13 +151,18 @@ public sealed partial class OrganizationConsoleWindow
         filter.AddItem("Усі записи біржі", (int)TdfReviewFilter.All);
         filter.SelectId((int)_tdfReviewFilter);
         filter.OnItemSelected += e => ChangeTdfFilter((TdfReviewFilter)e.Id);
-        leftBody.AddChild(filter);
+        filterRow.AddChild(filter);
+        var refresh = new Button { Text = "Оновити", MinHeight = 32 };
+        refresh.OnPressed += _ => RefreshRequested?.Invoke();
+        filterRow.AddChild(refresh);
+        overviewBody.AddChild(filterRow);
         var listScroll = new ScrollContainer { HScrollEnabled = false, HorizontalExpand = true, VerticalExpand = true };
         listScroll.AddChild(_tdfReviewList);
         leftBody.AddChild(listScroll);
         layout.AddChild(left);
 
         var right = BuildTitledPanel("Матеріали перевірки", out var rightBody, true);
+        right.MinWidth = 420;
         var detailScroll = new ScrollContainer { HScrollEnabled = false, HorizontalExpand = true, VerticalExpand = true };
         detailScroll.AddChild(_tdfReviewDetail);
         rightBody.AddChild(detailScroll);
@@ -174,7 +185,17 @@ public sealed partial class OrganizationConsoleWindow
         if (_tdfReviewFilter == TdfReviewFilter.Open && _tdfSelectedCase is { } selected &&
             cases.Any(c => c.Id == selected && c.Status != OrganizationTdfCaseStatus.Open))
         {
+            _tdfDraftCase = null;
+            _tdfDecisionDraft = string.Empty;
             ChangeTdfFilter(TdfReviewFilter.Archive, keepSelection: true);
+            return;
+        }
+        if (_tdfReviewFilter == TdfReviewFilter.Archive && _tdfSelectedCase is { } reopened &&
+            cases.Any(c => c.Id == reopened && c.Status == OrganizationTdfCaseStatus.Open))
+        {
+            _tdfDraftCase = null;
+            _tdfDecisionDraft = string.Empty;
+            ChangeTdfFilter(TdfReviewFilter.Open, keepSelection: true);
             return;
         }
         RefreshTdfReviewRows();
@@ -409,7 +430,8 @@ public sealed partial class OrganizationConsoleWindow
 
         if (!string.IsNullOrWhiteSpace(docket.DecisionNote))
         {
-            var result = BuildTitledPanel("Рішення", out var resultBody);
+            var result = BuildTitledPanel(docket.Status == OrganizationTdfCaseStatus.Open ?
+                "Підстава поновлення" : "Рішення", out var resultBody);
             resultBody.AddChild(new Label { Text = TdfWrap(docket.DecisionNote, 46),
                 FontColorOverride = TdfCaseColor(docket.Status) });
             _tdfReviewDetail.AddChild(result);
@@ -453,12 +475,41 @@ public sealed partial class OrganizationConsoleWindow
             actions.AddChild(clear);
             actions.AddChild(refer);
             decisionBody.AddChild(actions);
-            decisionBody.AddChild(new Label { Text = TdfWrap("Передача справи не блокує рахунки й не оголошує розшук.", 46),
+            decisionBody.AddChild(new Label { Text = TdfWrap("Передача справи фіксує матеріали для подальшого службового розгляду. Санкції застосовуються окремо.", 46),
                 FontColorOverride = Color.FromHex("#91A2B0") });
             _tdfReviewDetail.AddChild(decision);
         }
         else if (docket.Status == OrganizationTdfCaseStatus.Open)
             _tdfReviewDetail.AddChild(new Label { Text = TdfWrap("Для рішення потрібен старший співробітник.", 46) });
+        else if (_state?.TdfCanResolveCases == true)
+        {
+            if (_tdfDraftCase != docket.Id)
+            {
+                _tdfDraftCase = docket.Id;
+                _tdfDecisionDraft = string.Empty;
+            }
+            var reopenPanel = BuildTitledPanel("Поновлення справи", out var reopenBody);
+            reopenBody.AddChild(new Label { Text = TdfWrap("З'явилися нові матеріали? Зазначте підставу для повторної перевірки.", 46) });
+            var note = new LineEdit { Text = _tdfDecisionDraft, PlaceHolder = "Нові відомості (5–220 символів)",
+                HorizontalExpand = true, MinHeight = 32 };
+            var reopen = new Button { Text = "Поновити справу", HorizontalExpand = true, MinHeight = 34,
+                Modulate = Color.FromHex("#E5BF75") };
+            void ValidateReopen()
+            {
+                _tdfDecisionDraft = note.Text;
+                reopen.Disabled = note.Text.Trim().Length is < 5 or > 220 || note.Text.Any(char.IsControl);
+            }
+            note.OnTextChanged += _ => ValidateReopen();
+            ValidateReopen();
+            reopen.OnPressed += _ =>
+            {
+                reopen.Disabled = true;
+                TdfResolveCaseRequested?.Invoke(docket.Id, OrganizationTdfCaseStatus.Open, note.Text.Trim());
+            };
+            reopenBody.AddChild(note);
+            reopenBody.AddChild(reopen);
+            _tdfReviewDetail.AddChild(reopenPanel);
+        }
 
         if (docket.History.Length > 0)
         {

@@ -549,6 +549,7 @@ namespace Content.Server.Cargo.Systems
                 requester.Length is < 1 or > 100 || totalUnits is < 1 or > 80 ||
                 alreadyRequested < 0 || alreadyRequested >= totalUnits ||
                 !TryComp<CargoOrderConsoleComponent>(console, out var control) ||
+                !IsQuotaTradeMall(Transform(console).GridUid) ||
                 !TryGetOrderDatabase(console, out var station, out var database, control) ||
                 postTargets is not { Length: 4 } || postTargets.Any(n => n < 0) ||
                 postTargets.Sum() != totalUnits ||

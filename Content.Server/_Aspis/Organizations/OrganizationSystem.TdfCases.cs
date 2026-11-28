@@ -15,7 +15,7 @@ namespace Content.Server._Aspis.Organizations;
 public sealed partial class OrganizationSystem
 {
     private const int MaxTdfCases = 160;
-    private const int MaxTdfCaseActions = 16;
+    private const int MaxTdfCaseActions = 64;
 
     // Evidence identifiers are deterministic and survive persistence of the original logs.
     private static string TdfSourceHash(string value) =>
@@ -171,7 +171,7 @@ public sealed partial class OrganizationSystem
     private void OnTdfResolveCase(EntityUid uid, OrganizationConsoleComponent comp, OrganizationTdfResolveCaseMessage args)
     {
         if (!TryAuthorizeTdfReview(uid, args.Actor, true, out var officer) ||
-            args.Status is not (OrganizationTdfCaseStatus.Cleared or OrganizationTdfCaseStatus.Referred) ||
+            args.Status is not (OrganizationTdfCaseStatus.Open or OrganizationTdfCaseStatus.Cleared or OrganizationTdfCaseStatus.Referred) ||
             args.Note == null)
             return;
         var note = args.Note.Trim().Replace('\r', ' ').Replace('\n', ' ');
@@ -181,9 +181,10 @@ public sealed partial class OrganizationSystem
             return;
         }
         var docket = _tdfCases.FirstOrDefault(c => c.Id == args.CaseId);
-        if (docket == null || docket.Status != OrganizationTdfCaseStatus.Open)
+        var reopening = args.Status == OrganizationTdfCaseStatus.Open;
+        if (docket == null || (docket.Status == OrganizationTdfCaseStatus.Open) == reopening)
         {
-            Refresh(uid, args.Actor, "Справу не знайдено або рішення вже ухвалено.");
+            Refresh(uid, args.Actor, "Стан справи змінився. Оновіть журнал.");
             return;
         }
         var now = DateTime.UtcNow;
@@ -196,9 +197,12 @@ public sealed partial class OrganizationSystem
                 {
                     Utc = now,
                     Officer = officer,
-                    Description = (args.Status == OrganizationTdfCaseStatus.Cleared
-                        ? "Порушення не встановлено: "
-                        : "Передано на розгляд: ") + note
+                    Description = (args.Status switch
+                    {
+                        OrganizationTdfCaseStatus.Open => "Справу поновлено. Нові відомості: ",
+                        OrganizationTdfCaseStatus.Cleared => "Порушення не встановлено: ",
+                        _ => "Передано на службовий розгляд: "
+                    }) + note
                 });
                 if (docket.History.Count > MaxTdfCaseActions)
                     docket.History.RemoveAt(0);
@@ -209,6 +213,6 @@ public sealed partial class OrganizationSystem
         }
         _adminLog.Add(LogType.Action, LogImpact.High,
             $"TDF case DECISION id={docket.Id} status={args.Status} officer={officer} note={note}");
-        Refresh(uid, args.Actor, "Рішення TDF зареєстровано.");
+        Refresh(uid, args.Actor, reopening ? "Справу поновлено. Вона знову в журналі відкритих справ." : "Рішення TDF зареєстровано.");
     }
 }

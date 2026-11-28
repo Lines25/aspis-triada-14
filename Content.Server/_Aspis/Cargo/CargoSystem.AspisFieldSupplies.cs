@@ -10,7 +10,7 @@ namespace Content.Server.Cargo.Systems;
 public sealed partial class CargoSystem
 {
         /// <summary>
-        /// Reuses ordinary Trade Mall Cargo Requests for a single faction field
+        /// Reuses ordinary Auric Trade Center Cargo Requests for a single faction field
         /// kit crate. The Aspis organization system authenticates and consumes
         /// its one-use physical invoice before calling this method.
         /// </summary>
