@@ -2156,18 +2156,49 @@ public sealed partial class OrganizationSystem : EntitySystem
             return;
         }
 
-        Refresh(uid, actor, TryAdmit(org, actor, key, name, org.EntryFee)
-            ? $"Ви вступили до організації {org.Name}." : "Не вдалося вступити або сплатити внесок.");
+        var admitted = TryAdmit(org, actor, key, name, org.EntryFee, out var failure);
+        Refresh(uid, actor, admitted ? $"Ви вступили до організації {org.Name}." : failure);
     }
 
-    private bool TryAdmit(Organization org, EntityUid actor, CharacterKey key, string name, int fee)
+    // A free application can be approved against its persisted character identity,
+    // even when that character has no active body. A paid admission requires the
+    // original controller because the bank resolves the currently selected profile.
+    private bool TryAdmit(Organization org, EntityUid? actor, CharacterKey key, string name, int fee,
+        out string failure)
     {
-        if (FindMembership(key) != null || org.Members.Count >= MaxMembers ||
-            org.InsolvencyState == OrganizationInsolvencyState.Liquidation ||
-            org.Treasury > MaxTreasury - fee || !_store.Available)
+        failure = string.Empty;
+        if (FindMembership(key) != null)
+            failure = "Не вдалося прийняти: персонаж уже є учасником організації.";
+        else if (org.Members.Count >= MaxMembers)
+            failure = "Не вдалося прийняти: досягнуто ліміт учасників.";
+        else if (org.InsolvencyState == OrganizationInsolvencyState.Liquidation)
+            failure = "Не вдалося прийняти: організація припиняє діяльність.";
+        else if (_lastDepartureUtc.TryGetValue(key, out var departure) &&
+                 DateTime.UtcNow - departure < PostExitWait)
+            failure = "Не вдалося прийняти: після виходу має минути 15 хвилин.";
+        else if (fee is < 0 or > MaxEntryFee || org.Treasury > MaxTreasury - fee)
+            failure = "Не вдалося прийняти: некоректний внесок або переповнена скарбниця.";
+        else if (!_store.Available)
+            failure = "Не вдалося прийняти: сховище організацій недоступне.";
+        if (failure.Length != 0)
             return false;
-        if (fee > 0 && !_bank.TryBankWithdraw(actor, fee))
-            return false;
+
+        if (fee > 0)
+        {
+            if (actor is not { } payer || !IsOriginalController(payer) ||
+                !TryGetCharacter(payer, out var actualKey, out _) || actualKey != key ||
+                IsTdfOfficer(payer))
+            {
+                failure = "Потрібно, щоб заявник увійшов у гру своїм персонажем для сплати внеску.";
+                return false;
+            }
+
+            if (!_bank.TryBankWithdraw(payer, fee))
+            {
+                failure = "Не вдалося списати вступний внесок: перевірте баланс і доступність рахунку заявника.";
+                return false;
+            }
+        }
 
         var member = new Member(key, name, OrganizationMemberRole.Member, Guid.NewGuid())
         {
@@ -2177,36 +2208,61 @@ public sealed partial class OrganizationSystem : EntitySystem
         {
             org.Members.Add(key, member);
             org.Treasury += fee;
-            foreach (var id in org.Applications.Values.Where(a => a.Key == key).Select(a => a.Id).ToArray())
-                org.Applications.Remove(id);
+            // Membership is exclusive. Close other pending applications of this
+            // character in the same persisted transaction.
+            foreach (var organization in _organizations.Values)
+                foreach (var id in organization.Applications.Values.Where(a => a.Key == key).Select(a => a.Id).ToArray())
+                    organization.Applications.Remove(id);
         });
         if (!accepted)
         {
-            if (fee > 0 && !_bank.TryBankDeposit(actor, fee))
-                _adminLog.Add(LogType.Action, LogImpact.High, $"Refund failed for {ToPrettyString(actor):player}, amount={fee}");
+            if (fee > 0 && actor is { } refundActor && !_bank.TryBankDeposit(refundActor, fee))
+                _adminLog.Add(LogType.Action, LogImpact.High, $"Refund failed for {ToPrettyString(refundActor):player}, amount={fee}");
+            failure = "Не вдалося зберегти вступ. Заявка залишається в черзі.";
             return false;
         }
 
-        UpdateAffiliation(actor, key);
-        SynchronizeOrdinaryCompanyId(actor, key);
-        _adminLog.Add(LogType.Action, LogImpact.Low,
-            $"{ToPrettyString(actor):player} joined {org.Name} ({org.Id}), fee={fee}");
+        if (actor is { } body)
+        {
+            UpdateAffiliation(body, key);
+            SynchronizeOrdinaryCompanyId(body, key);
+            _adminLog.Add(LogType.Action, LogImpact.Low,
+                $"{ToPrettyString(body):player} joined {org.Name} ({org.Id}), fee={fee}");
+        }
+        else
+        {
+            // Offline membership is persisted; spawn/attach will restore the
+            // affiliation and the normal ID synchronization will apply access.
+            _adminLog.Add(LogType.Action, LogImpact.Low,
+                $"Character {name} ({key.UserId}, slot={key.Slot}) joined {org.Name} ({org.Id}), fee=0, offline");
+        }
         return true;
     }
 
     private void OnReview(EntityUid uid, OrganizationConsoleComponent comp, OrganizationReviewMessage args)
     {
         var actor = args.Actor;
-        if (!AuthorizedBusiness(uid, actor) ||
-            !TryGetCharacter(actor, out var key, out _))
+        if (!Authorized(uid, actor))
             return;
-
-        var org = _organizations.Values.FirstOrDefault(o => o.Members.TryGetValue(key, out var member) &&
-            HasPermission(o, member, OrganizationPermission.Applications) && o.Applications.ContainsKey(args.Application));
-        if (org == null)
+        if (!AuthorizedBusiness(uid, actor) || !TryGetCharacter(actor, out var key, out _))
+        {
+            Refresh(uid, actor, "Не вдалося розглянути заявку: потрібен власний персонаж та доступ до організації.");
             return;
+        }
 
-        var application = org.Applications[args.Application];
+        var org = FindMembership(key);
+        if (org == null || !org.Members.TryGetValue(key, out var member) ||
+            !HasPermission(org, member, OrganizationPermission.Applications))
+        {
+            Refresh(uid, actor, "Не вдалося розглянути заявку: недостатньо повноважень.");
+            return;
+        }
+        if (!org.Applications.TryGetValue(args.Application, out var application))
+        {
+            Refresh(uid, actor, "Не вдалося розглянути заявку: її вже оброблено або видалено.");
+            return;
+        }
+
         if (!args.Accept)
         {
             Refresh(uid, actor, Commit(() => org.Applications.Remove(args.Application))
@@ -2214,18 +2270,23 @@ public sealed partial class OrganizationSystem : EntitySystem
             return;
         }
 
-        if (!Guid.TryParse(application.Key.UserId, out var userId) ||
-            !_players.TryGetSessionById(new NetUserId(userId), out var session) ||
-            session.AttachedEntity is not { } applicant ||
-            !TryGetCharacter(applicant, out var actualKey, out var actualName) ||
-            actualKey != application.Key)
+        EntityUid? applicant = null;
+        if (Guid.TryParse(application.Key.UserId, out var userId) &&
+            _players.TryGetSessionById(new NetUserId(userId), out var session) &&
+            session.AttachedEntity is { } body &&
+            TryGetCharacter(body, out var actualKey, out _) &&
+            actualKey == application.Key && IsOriginalController(body))
+            applicant = body;
+
+        if (!TryAdmit(org, applicant, application.Key, application.Name, application.QuotedFee, out var failure))
         {
-            Refresh(uid, actor, "Заявник повинен бути в мережі саме цим персонажем, щоб сплатити внесок.");
+            Refresh(uid, actor, failure);
             return;
         }
 
-        Refresh(uid, actor, TryAdmit(org, applicant, actualKey, actualName, application.QuotedFee)
-            ? "Заявку схвалено." : "Заявник не може вступити або сплатити внесок.");
+        Refresh(uid, actor, $"Заявку схвалено: {application.Name} — новий учасник.");
+        if (applicant is { } admittedBody && Authorized(uid, admittedBody))
+            Refresh(uid, admittedBody, $"Заявку схвалено. Ви вступили до організації {org.Name}.");
     }
 
     private void OnConfigure(EntityUid uid, OrganizationConsoleComponent comp, OrganizationConfigureMessage args)
@@ -3689,7 +3750,7 @@ public sealed partial class OrganizationSystem : EntitySystem
                 IsMemberPresent(m.Key), management!.DeputyMemberId == m.Id, MemberTitle(management!, m), m.Distinction)
                 { CustomRoleId = m.CustomRoleId }).ToArray()
             ?? (onTdfDuty ? tdfMembers : []);
-        var applications = management != null &&
+        var applications = canOperate && management != null &&
             (managerPermissions & OrganizationPermission.Applications) != 0
             ? management.Applications.Values.OrderBy(a => a.Name)
                 .Select(a => new OrganizationApplicationEntry(a.Id, a.Name, a.QuotedFee)).ToArray()
