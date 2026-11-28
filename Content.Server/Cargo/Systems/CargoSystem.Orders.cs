@@ -1,3 +1,4 @@
+using Content.Shared._Aspis.Organizations;
 using System.Diagnostics.CodeAnalysis;
 using Content.Server._NF.Bank; // Frontier
 using Content.Server.Cargo.Components;
@@ -375,7 +376,8 @@ namespace Content.Server.Cargo.Systems
                 return;
             }
 
-            if (!component.AllowedGroups.Contains(product.Group))
+            if (!component.AllowedGroups.Contains(product.Group) ||
+                !OrganizationCargoCatalogRules.IsAvailable(product.ID, product.Product.Id, product.Name))
                 return;
 
             var data = GetOrderData(EntityManager.GetNetEntity(uid), args, product, GenerateOrderId(orderDatabase));

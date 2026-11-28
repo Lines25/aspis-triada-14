@@ -204,7 +204,8 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
         var people = EntityQueryEnumerator<MindContainerComponent, TransformComponent>();
         while (people.MoveNext(out _, out var mind, out var xform))
         {
-            if (!mind.HasMind || xform.MapUid is not { } map || xform.GridUid != map)
+            if (!mind.HasMind || xform.MapUid is not { } map ||
+                (xform.GridUid is { } indoor && indoor != map))
                 continue;
             if (!explorers.TryGetValue(map, out var positions))
                 explorers[map] = positions = new List<Vector2>();
