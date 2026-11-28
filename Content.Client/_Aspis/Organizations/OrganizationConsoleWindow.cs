@@ -1908,8 +1908,10 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
             state.Notice.StartsWith("Потрібно", StringComparison.OrdinalIgnoreCase) ||
             state.Notice.StartsWith("Біржа:", StringComparison.OrdinalIgnoreCase) ||
             state.Notice.StartsWith("Акції недоступні", StringComparison.OrdinalIgnoreCase);
-        _notice.Visible = error;
-        _notice.Text = error ? state.Notice : string.Empty;
+        // Application decisions need explicit feedback, including successful approval.
+        var applicationNotice = state.Notice.StartsWith("Заявку ", StringComparison.OrdinalIgnoreCase);
+        _notice.Visible = error || applicationNotice;
+        _notice.Text = error || applicationNotice ? state.Notice : string.Empty;
         _personalBalance.Text = state.ViewingAnotherCharacter
             ? "Перегляд персонажа"
             : $"Баланс: {state.PersonalBalance:N0} $";
@@ -3791,8 +3793,10 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
             var row = new BoxContainer { Orientation = LayoutOrientation.Horizontal, HorizontalExpand = true, SeparationOverride = 5 };
             row.AddChild(new Label { Text = $"{application.Name}: внесок {application.Fee}", HorizontalExpand = true });
             var id = application.Id;
-            var accept = new Button { Text = "Прийняти" };
-            var decline = new Button { Text = "Відмовити" };
+            var accept = new Button { Text = "Затвердити",
+                Disabled = _state.ViewingAnotherCharacter,
+                ToolTip = application.Fee > 0 ? "Для списання внеску заявник має бути у грі своїм персонажем." : "Безкоштовний вступ можна затвердити й за відсутності заявника." };
+            var decline = new Button { Text = "Відмовити", Disabled = _state.ViewingAnotherCharacter };
             accept.OnPressed += _ => ReviewRequested?.Invoke(id, true);
             decline.OnPressed += _ => ReviewRequested?.Invoke(id, false);
             row.AddChild(accept);
