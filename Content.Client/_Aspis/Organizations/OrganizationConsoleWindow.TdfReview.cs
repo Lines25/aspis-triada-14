@@ -1,4 +1,6 @@
+using System;
 using System.Linq;
+using Robust.Client.Graphics;
 using Content.Shared._Aspis.Organizations;
 using Robust.Client.UserInterface;
 using Robust.Client.UserInterface.Controls;
@@ -31,6 +33,8 @@ public sealed partial class OrganizationConsoleWindow
         _tdfSelectedAlert = null;
         _tdfDraftCase = null;
         _tdfDecisionDraft = string.Empty;
+        _tdfReviewList.Parent?.RemoveChild(_tdfReviewList);
+        _tdfReviewDetail.Parent?.RemoveChild(_tdfReviewDetail);
         Clear(_tdfReviewList);
         Clear(_tdfReviewDetail);
         Clear(_tdfBody);
@@ -64,7 +68,7 @@ public sealed partial class OrganizationConsoleWindow
 
     private static string TdfSeverityLabel(string reason) => TdfSeverity(reason) switch
     {
-        3 => "III / Узгоджені торги",
+        3 => "III / Ознаки узгоджених торгів",
         2 => "II / Потрібна перевірка",
         1 => "I / Незвичний обсяг",
         _ => "Потрібна перевірка"
@@ -155,18 +159,16 @@ public sealed partial class OrganizationConsoleWindow
         _tdfBody.AddChild(layout);
 
         // When an alert becomes a case, keep its materials selected.
-        if (_tdfSelectedCase == null && _tdfSelectedAlert != null)
+        if (_tdfReviewFilter == TdfReviewFilter.Pending && _tdfSelectedCase == null && _tdfSelectedAlert != null)
         {
             var opened = cases.FirstOrDefault(c => c.SourceKey == _tdfSelectedAlert);
             if (opened != null)
             {
                 _tdfSelectedCase = opened.Id;
                 _tdfSelectedAlert = null;
-                if (_tdfReviewFilter == TdfReviewFilter.Pending)
-                {
-                    ChangeTdfFilter(TdfReviewFilter.Open, keepSelection: true);
-                    return;
-                }
+                ChangeTdfFilter(opened.Status == OrganizationTdfCaseStatus.Open ?
+                    TdfReviewFilter.Open : TdfReviewFilter.Archive, keepSelection: true);
+                return;
             }
         }
         if (_tdfReviewFilter == TdfReviewFilter.Open && _tdfSelectedCase is { } selected &&
@@ -342,7 +344,7 @@ public sealed partial class OrganizationConsoleWindow
         {
             var reasonPanel = BuildTitledPanel("Підстава для перевірки", out var reasonBody);
             reasonBody.AddChild(new Label { Text = TdfWrap(TdfReason(reason), 46), FontColorOverride = color });
-            reasonBody.AddChild(new Label { Text = "Сигнал не є встановленим порушенням.",
+            reasonBody.AddChild(new Label { Text = TdfWrap("Сигнал не є встановленим порушенням.", 46),
                 FontColorOverride = Color.FromHex("#91A2B0") });
             _tdfReviewDetail.AddChild(reasonPanel);
             var docket = _state?.TdfCases.FirstOrDefault(c => c.SourceKey == alert.SourceKey);
@@ -454,7 +456,7 @@ public sealed partial class OrganizationConsoleWindow
             _tdfReviewDetail.AddChild(decision);
         }
         else if (docket.Status == OrganizationTdfCaseStatus.Open)
-            _tdfReviewDetail.AddChild(new Label { Text = "Для рішення потрібен старший співробітник." });
+            _tdfReviewDetail.AddChild(new Label { Text = TdfWrap("Для рішення потрібен старший співробітник.", 46) });
 
         if (docket.History.Length > 0)
         {
