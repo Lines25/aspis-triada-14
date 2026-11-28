@@ -21,7 +21,7 @@ public sealed partial class CargoSystem
             if (organization == Guid.Empty || code.Length is < 6 or > 48 ||
                 requester.Length is < 1 or > 100 ||
                 !TryComp<CargoOrderConsoleComponent>(console, out var control) ||
-                !IsQuotaTradeMall(Transform(console).GridUid) ||
+                !IsQuotaTradeHub(Transform(console).GridUid) ||
                 !_protoMan.HasIndex<EntityPrototype>(product) ||
                 !TryGetOrderDatabase(console, out var station, out var database, control) ||
                 database.Capacity - GetOutstandingOrderCount(database) -

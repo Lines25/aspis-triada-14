@@ -29,21 +29,31 @@ public sealed partial class CargoSystem
     private const string QuotaTradeCratePrototype = "CrateTradeSecureNormal";
     private readonly Dictionary<CargoOrderData, QuotaOrderAuthorization> _quotaOrders = new();
 
-    private bool IsQuotaTradeMall(EntityUid? grid)
+    // The actual Auric station is marked by its gameMap prototype, not a
+    // player-visible name that can change or be copied by another grid.
+    public bool IsQuotaTradeHub(EntityUid? grid)
     {
-        if (grid is not { Valid: true } id || Deleted(id) ||
-            _station.GetOwningStation(id) is not { Valid: true } station ||
-            !TryComp<TradeCrateDestinationComponent>(station, out var destination) ||
-            destination.DestinationProto.Id != "Trade")
-            return false;
-        return IsQuotaTradeHubName(MetaData(id).EntityName) ||
-               IsQuotaTradeHubName(MetaData(station).EntityName);
+        return grid is { Valid: true } id && !Deleted(id) &&
+               _station.GetOwningStation(id) is { Valid: true } station &&
+               IsQuotaTradeHubStation(station);
     }
 
-    private static bool IsQuotaTradeHubName(string name) =>
-        string.Equals(name, "Auric Trade Center", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(name, "Auric Trade Mall", StringComparison.OrdinalIgnoreCase) ||
-        string.Equals(name, "Trade Mall", StringComparison.OrdinalIgnoreCase);
+    private bool IsQuotaTradeHubStation(EntityUid station) =>
+        !TerminatingOrDeleted(station) && HasComp<OrganizationTradeHubComponent>(station) &&
+        TryComp<TradeCrateDestinationComponent>(station, out var destination) &&
+        destination.DestinationProto.Id == "Trade";
+
+    public bool HasQuotaTradeHub()
+    {
+        var hubs = EntityQueryEnumerator<OrganizationTradeHubComponent>();
+        while (hubs.MoveNext(out var station, out _))
+            if (IsQuotaTradeHubStation(station))
+                return true;
+        return false;
+    }
+
+    public bool HasAllQuotaTradeDestinations() =>
+        Enumerable.Range(0, 4).All(post => TryGetQuotaTradeDestination(post, out _));
 
     private bool IsActiveFrontierAuthorization(QuotaOrderAuthorization authorization) =>
         EntityManager.System<OrganizationSystem>().IsActiveFrontierCargoOrder(authorization.Organization,
@@ -57,30 +67,37 @@ public sealed partial class CargoSystem
         // The linked pad must belong to the same server-authorized station
         // as the issuing Cargo Requests console, not a mutable grid name.
         return grid is { Valid: true } id && !Deleted(id) &&
-               _station.GetOwningStation(id) == auth.SourceStation &&
-               (auth.Frontier ? IsActiveFrontierAuthorization(auth) : TryGetQuotaTradeDestination(3, out _));
+               _station.GetOwningStation(id) == auth.SourceStation && IsQuotaTradeHub(id) &&
+               (auth.Frontier ? IsActiveFrontierAuthorization(auth) : HasAllQuotaTradeDestinations());
     }
 
     private void ResetQuotaDeliveryRound() => _quotaOrders.Clear();
 
     /// <summary>
-    /// A-D are the four first active trade destinations, sorted by station name.
-    /// They are real trade stations already used by Frontier cargo, not virtual counters.
-    /// A quota batch cannot be issued unless all four destinations exist.
+    /// A-D are the physical Auric Trade Depots with CargoA through CargoD
+    /// destination prototypes. The central Trade hub and optional markets
+    /// must never shift the assignment or count as a depot.
     /// </summary>
     public bool TryGetQuotaTradeDestination(int post, out EntityUid destination)
     {
         destination = EntityUid.Invalid;
-        if (post is < 0 or > 3)
+        if (!OrganizationTradeDestinationRules.TryGetDepotId(post, out var depotId))
             return false;
-        var active = _destinations
-            .Where(uid => TryComp<TradeCrateDestinationComponent>(uid, out _))
-            .OrderBy(uid => MetaData(uid).EntityName, StringComparer.Ordinal)
-            .ToArray();
-        if (active.Length < 4)
-            return false;
-        destination = active[post];
-        return true;
+        foreach (var uid in _destinations)
+        {
+            if (TerminatingOrDeleted(uid) ||
+                !TryComp<TradeCrateDestinationComponent>(uid, out var component) ||
+                component.DestinationProto.Id != depotId)
+                continue;
+            // An ambiguous duplicate is an invalid destination, not an arbitrary choice.
+            if (destination.Valid)
+            {
+                destination = EntityUid.Invalid;
+                return false;
+            }
+            destination = uid;
+        }
+        return destination.Valid;
     }
 
     public bool IsQuotaExportAtDestination(EntityUid crate, int post)

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Content.Server._Aspis.Organizations;
+using Content.Server.Cargo.Systems;
 using Content.Shared.Containers.ItemSlots;
 using Content.Shared.Ghost;
 using Content.Shared.Shuttles.Components;
@@ -20,7 +21,7 @@ public sealed partial class ShuttleConsoleSystem
 {
     // Shuttle FTL itself refuses departure near powered consoles (~512 m).
     // The authorized staging corridor therefore extends beyond that exclusion.
-    private const float FactionExpeditionTradeMallLaunchRadius = 1200f;
+    private const float FactionExpeditionTradeHubLaunchRadius = 1200f;
     [Dependency] private ItemSlotsSystem _aspisFactionDiskSlots = default!;
     [Dependency] private IGameTiming _aspisFactionTiming = default!;
     [Dependency] private IPlayerManager _aspisFactionPlayers = default!;
@@ -59,11 +60,11 @@ public sealed partial class ShuttleConsoleSystem
                 reason = "У шатлі повинен бути учасник фракції, яка отримала координати.";
                 return false;
             }
-            // First leg must actually depart the Trade Mall vicinity. A disk
+            // First leg must actually depart the Auric Trade Center vicinity. A disk
             // carried during a battle elsewhere is not an escape destination.
-            if (route.AssignedShuttle == null && !IsNearTradeMall(shuttle, source))
+            if (route.AssignedShuttle == null && !IsNearTradeHub(source))
             {
-                reason = "Перший виліт за фракційними координатами доступний тільки біля Trade Mall.";
+                reason = "Перший виліт за фракційними координатами доступний тільки біля Auric Trade Center.";
                 return false;
             }
         }
@@ -101,16 +102,16 @@ public sealed partial class ShuttleConsoleSystem
             route.AssignedShuttle ??= shuttle;
     }
 
-    private bool IsNearTradeMall(EntityUid shuttle, TransformComponent shuttleXform)
+    private bool IsNearTradeHub(TransformComponent shuttleXform)
     {
         var query = EntityQueryEnumerator<MapGridComponent, TransformComponent>();
         while (query.MoveNext(out var grid, out _, out var xform))
         {
             if (xform.MapUid != shuttleXform.MapUid ||
-                !MetaData(grid).EntityName.Contains("Trade Mall", StringComparison.OrdinalIgnoreCase))
+                !EntityManager.System<CargoSystem>().IsQuotaTradeHub(grid))
                 continue;
             if ((xform.MapPosition.Position - shuttleXform.MapPosition.Position).LengthSquared() <=
-                FactionExpeditionTradeMallLaunchRadius * FactionExpeditionTradeMallLaunchRadius)
+                FactionExpeditionTradeHubLaunchRadius * FactionExpeditionTradeHubLaunchRadius)
                 return true;
         }
         return false;

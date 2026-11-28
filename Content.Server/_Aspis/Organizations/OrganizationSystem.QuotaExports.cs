@@ -178,8 +178,7 @@ public sealed partial class OrganizationSystem
             if (job.Key.Slot == AspisPlanetaryAgriculturalSlot)
                 return false; // One-shot atmospheric sprayer is the only proof.
             var destination = Array.FindIndex(job.Value.PostTargets, n => n > 0);
-            if (destination >= 0 && _quotaCargoSystem.TryGetQuotaTradeDestination(destination, out _) &&
-                !_quotaCargoSystem.IsQuotaExportAtDestination(crate, destination))
+            if (destination < 0 || !_quotaCargoSystem.IsQuotaExportAtDestination(crate, destination))
                 return false;
         }
         if (workflow == OrganizationQuotaWorkflow.PharmaceuticalExport)
@@ -228,8 +227,7 @@ public sealed partial class OrganizationSystem
             if (job.Key.Slot == AspisPlanetaryAgriculturalSlot)
                 return;
             var destination = Array.FindIndex(job.Value.PostTargets, n => n > 0);
-            if (destination >= 0 && _quotaCargoSystem.TryGetQuotaTradeDestination(destination, out _) &&
-                !_quotaCargoSystem.IsQuotaExportAtDestination(crate, destination))
+            if (destination < 0 || !_quotaCargoSystem.IsQuotaExportAtDestination(crate, destination))
                 return;
         }
 

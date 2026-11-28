@@ -141,7 +141,7 @@ public sealed partial class OrganizationSystem
         // The four physical trade posts must exist before a delivery is issued.
         // Otherwise a player could pay for a quota they cannot possibly complete.
         if (claim.Scenario.Id != FrontierScenarioId &&
-            !_quotaCargoSystem.TryGetQuotaTradeDestination(3, out _))
+            !_quotaCargoSystem.HasAllQuotaTradeDestinations())
         {
             _quotaPopup.PopupEntity("Квота недоступна: торгові пости A-D ще не завантажені на мапі.",
                 args.User, args.User);

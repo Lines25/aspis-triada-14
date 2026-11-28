@@ -507,17 +507,24 @@ public sealed partial class OrganizationSystem
             offer = new SectorQuotaOffer(count, minutes, OrganizationFrontierCargoRules.Destinations(count),
                 offer.PharmaceuticalVariant, offer.Scenario, work, offer.ScenarioVariant);
         }
+        // Both expedition launch and Cargo Requests require the real Auric hub.
+        if ((org.Kind == OrganizationKind.Faction || offer.Scenario.Workflow == OrganizationQuotaWorkflow.CargoDelivery) &&
+            !_quotaCargoSystem.HasQuotaTradeHub())
+        {
+            Refresh(uid, args.Actor, "Auric Trade Center зараз недоступний. Завдання не зарезервовано.");
+            return;
+        }
         // Fail closed when physical delivery infrastructure has not spawned.
         if (org.Kind == OrganizationKind.Company &&
             offer.Scenario.Id != FrontierScenarioId &&
             offer.Scenario.Workflow is OrganizationQuotaWorkflow.CargoDelivery or
                 OrganizationQuotaWorkflow.PharmaceuticalExport)
         {
-            // Dispatching commercial Cargo requests currently requires post D.
+            // Dispatching commercial Cargo requests requires the four actual depots.
             if (offer.Scenario.Workflow == OrganizationQuotaWorkflow.CargoDelivery &&
-                !_quotaCargoSystem.TryGetQuotaTradeDestination(3, out _))
+                !_quotaCargoSystem.HasAllQuotaTradeDestinations())
             {
-                Refresh(uid, args.Actor, "Центральний вантажний термінал D зараз недоступний.");
+                Refresh(uid, args.Actor, "Торгові депо Auric A–D зараз недоступні.");
                 return;
             }
             for (var post = 0; post < offer.PostTargets.Length; post++)
