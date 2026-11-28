@@ -2155,7 +2155,7 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
         panel.AddChild(new Label { Text = $"Зовнішні внески: {org.ExternalInvestmentTotal:N0} $" });
         if (org.Kind == OrganizationKind.Company)
             panel.AddChild(new Label { Text = $"Підтримка цільового котирування: +{org.InvestmentDemandPercent}%" });
-        if (!org.InvestorsPublic && org.ExternalInvestors.Length == 0)
+        if (!org.InvestorListVisible)
             panel.AddChild(new Label { Text = "Імена інвесторів приховано." });
         foreach (var investor in org.ExternalInvestors)
             panel.AddChild(new Label { Text = WrapText($"{investor.Name}: {investor.Amount:N0} $", 48) });

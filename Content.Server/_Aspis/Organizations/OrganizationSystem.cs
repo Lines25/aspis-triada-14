@@ -963,6 +963,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         }))
             return;
 
+        NotifyPassiveMarketReviews(nowUtc);
         foreach (var company in _organizations.Values.Where(o => o.Kind == OrganizationKind.Company))
             CheckConcentration(company);
 

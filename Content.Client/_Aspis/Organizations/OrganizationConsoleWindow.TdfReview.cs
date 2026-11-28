@@ -334,7 +334,8 @@ public sealed partial class OrganizationConsoleWindow
             AddTdfField(left, "Контрагент", alert.Counterparty);
         AddTdfField(right, "Вид запису", alert.Operation);
         if (alert.Amount > 0)
-            AddTdfField(right, "Сума", $"{alert.Amount:N0} $", Color.FromHex("#91CBA2"));
+            AddTdfField(right, alert.Actor == "Автономна економіка" ? "Виручка циклу" : "Сума",
+                $"{alert.Amount:N0} $", Color.FromHex("#91CBA2"));
         if (alert.Quantity > 0)
             AddTdfField(right, "Акції", $"{alert.Quantity:N0} шт.");
         body.AddChild(columns);
@@ -399,7 +400,8 @@ public sealed partial class OrganizationConsoleWindow
             if (!string.IsNullOrWhiteSpace(alert.Counterparty))
                 AddTdfField(evidenceBody, "Контрагент", alert.Counterparty, width: 42);
             if (alert.Amount > 0)
-                AddTdfField(evidenceBody, "Сума запису", $"{alert.Amount:N0} $", width: 42);
+                AddTdfField(evidenceBody, alert.Actor == "Автономна економіка" ? "Виручка циклу" : "Сума запису",
+                    $"{alert.Amount:N0} $", width: 42);
             if (alert.Quantity > 0)
                 AddTdfField(evidenceBody, "Акції", $"{alert.Quantity:N0} шт.", width: 42);
         }

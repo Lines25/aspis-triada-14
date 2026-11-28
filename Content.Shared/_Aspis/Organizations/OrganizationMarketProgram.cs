@@ -46,8 +46,8 @@ public static class OrganizationMarketProgramRules
     {
         var rate = program switch
         {
-            OrganizationMarketProgram.PriceCampaign => 20,
-            OrganizationMarketProgram.PriorityContracts => 15,
+            OrganizationMarketProgram.PriceCampaign => 12,
+            OrganizationMarketProgram.PriorityContracts => 20,
             _ => 0
         };
         return (int)((Math.Max(0, gross) * (long)rate + 99) / 100);
@@ -59,7 +59,7 @@ public static class OrganizationMarketProgramRules
         int gross, int costs, long industryGross, int competingCompanies)
     {
         if (program == OrganizationMarketProgram.None || remaining >= Duration ||
-            remaining <= 0 || gross <= 0 || industryGross <= 0 || competingCompanies <= 0)
+            remaining <= 0 || gross < 250 || industryGross < 500 || competingCompanies <= 0)
             return 0;
         var share = 100L * gross / industryGross;
         return program switch

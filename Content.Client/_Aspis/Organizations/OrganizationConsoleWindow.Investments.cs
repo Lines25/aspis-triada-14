@@ -161,7 +161,7 @@ public sealed partial class OrganizationConsoleWindow
             var label = price ? "Цінова кампанія" : "Пріоритетні контракти";
             var choice = BuildTitledPanel(label, out var choiceBody);
             AddMetric(choiceBody, "Вага попиту", price ? "+35%" : "+50%", Color.FromHex("#91CBA2"));
-            AddMetric(choiceBody, "Додаткові витрати", price ? "20% виручки" : "15% виручки", Color.FromHex("#E5A39C"));
+            AddMetric(choiceBody, "Додаткові витрати", price ? "12% виручки" : "20% виручки", Color.FromHex("#E5A39C"));
             choiceBody.AddChild(new Label { Text = WrapText(price ?
                 "Залучення замовлень за рахунок цінової кампанії." :
                 "Залучення замовлень через пріоритетні угоди.", 43) });

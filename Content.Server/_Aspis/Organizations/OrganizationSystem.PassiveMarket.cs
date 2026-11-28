@@ -2,6 +2,8 @@ using System;
 using System.Linq;
 using Content.Shared._Aspis.Organizations;
 using Content.Shared.Database;
+using Content.Shared.Radio;
+using Content.Server.Administration.Logs;
 
 namespace Content.Server._Aspis.Organizations;
 
@@ -55,7 +57,7 @@ public sealed partial class OrganizationSystem
         }
         _adminLog.Add(LogType.Action, LogImpact.Medium,
             $"Market program: {org.Id} program={args.Program} actor={ToPrettyString(actor):player}");
-        Refresh(uid, actor, "Ринкова програма розпочата на три прибуткові або збиткові цикли з виручкою.");
+        Refresh(uid, actor, "Ринкова програма розпочата. Діятиме три цикли з виручкою.");
     }
 
     // Called inside the same durable commit as the actual economy settlement.
@@ -66,7 +68,7 @@ public sealed partial class OrganizationSystem
         var rivals = 0;
         for (var i = 0; i < companies.Length; i++)
         {
-            if (i == index || companies[i].Industry != org.Industry)
+            if (i == index || companies[i].Industry != org.Industry || amounts[i] <= 0)
                 continue;
             rivals++;
             industryGross += amounts[i];
@@ -88,7 +90,7 @@ public sealed partial class OrganizationSystem
 
         // Independent review of unusually concentrated passive demand, even
         // when no player selected a market program.
-        if (rivals > 0 && org.CompletedEconomyCycles > 0 && org.LastCycleDemand > 0 &&
+        if (rivals > 0 && gross >= 250 && org.CompletedEconomyCycles > 0 && org.LastCycleDemand > 0 &&
             gross * 100L >= assignedDemand * 65L &&
             org.LastCycleGross * 100L >= org.LastCycleDemand * 35L &&
             gross * 100L >= industryGross * 70L)
@@ -96,6 +98,23 @@ public sealed partial class OrganizationSystem
             AddPassiveMarketAlert(org, "Концентрація пасивного попиту", gross, now,
                 $"I — Висока частка пасивної виручки у двох циклах. Поточна частка галузевої виручки: {100L * gross / industryGross}%. Перевірити умови конкуренції.");
         }
+    }
+
+    private void NotifyPassiveMarketReviews(DateTime now)
+    {
+        var alerts = _concentrationAlerts.Where(a => a.Utc == now && !string.IsNullOrEmpty(a.Operation)).ToArray();
+        if (alerts.Length == 0)
+            return;
+        foreach (var alert in alerts)
+            _adminLog.Add(LogType.Action, LogImpact.Medium,
+                $"TDF passive market review: {alert.Organization} {alert.Operation}: {alert.Reason}");
+        if (!_prototypes.TryIndex<RadioChannelPrototype>("Nfsd", out var channel))
+            return;
+        var query = EntityQueryEnumerator<OrganizationConsoleComponent>();
+        if (query.MoveNext(out var terminal, out _))
+            _radio.SendRadioMessage(terminal,
+                $"TDF: нові сигнали автономної економіки — {alerts.Length}. Перевірте журнал нагляду.",
+                channel, terminal);
     }
 
     private void AddPassiveMarketAlert(Organization org, string category, int gross, DateTime now, string reason)

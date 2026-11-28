@@ -17,8 +17,8 @@ public sealed class OrganizationMarketProgramTest
     [Test]
     public void CostsAreNotFreeDemand()
     {
-        Assert.That(OrganizationMarketProgramRules.ExtraCost(OrganizationMarketProgram.PriceCampaign, 1000), Is.EqualTo(200));
-        Assert.That(OrganizationMarketProgramRules.ExtraCost(OrganizationMarketProgram.PriorityContracts, 1000), Is.EqualTo(150));
+        Assert.That(OrganizationMarketProgramRules.ExtraCost(OrganizationMarketProgram.PriceCampaign, 1000), Is.EqualTo(120));
+        Assert.That(OrganizationMarketProgramRules.ExtraCost(OrganizationMarketProgram.PriorityContracts, 1000), Is.EqualTo(200));
     }
 
     [Test]
@@ -29,5 +29,6 @@ public sealed class OrganizationMarketProgramTest
         Assert.That(OrganizationMarketProgramRules.ReviewLevel(OrganizationMarketProgram.PriceCampaign, 2, 600, 700, 1000, 1), Is.EqualTo(3));
         Assert.That(OrganizationMarketProgramRules.ReviewLevel(OrganizationMarketProgram.PriorityContracts, 2, 400, 200, 1000, 1), Is.Zero);
         Assert.That(OrganizationMarketProgramRules.ReviewLevel(OrganizationMarketProgram.PriorityContracts, 2, 700, 400, 1000, 1), Is.EqualTo(3));
+        Assert.That(OrganizationMarketProgramRules.ReviewLevel(OrganizationMarketProgram.PriorityContracts, 2, 7, 4, 10, 1), Is.Zero);
     }
 }
