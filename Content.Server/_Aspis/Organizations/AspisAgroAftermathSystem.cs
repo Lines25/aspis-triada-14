@@ -26,6 +26,7 @@ using Robust.Shared.Prototypes;
 using Robust.Shared.Timing;
 using Robust.Shared.Utility;
 using Content.Shared.Parallax.Biomes;
+using Content.Shared.GameTicking;
 
 namespace Content.Server._Aspis.Organizations;
 
@@ -105,6 +106,16 @@ public sealed class AspisAgroAftermathSystem : EntitySystem
         SubscribeLocalEvent<AspisAgroQuarantineNodeComponent,
             GetVerbsEvent<AlternativeVerb>>(OnNodeVerbs);
         SubscribeLocalEvent<EntitySoldEvent>(OnCargoSold);
+        SubscribeLocalEvent<RoundRestartCleanupEvent>(OnRoundRestart);
+    }
+
+    private void OnRoundRestart(RoundRestartCleanupEvent args)
+    {
+        _storms.Clear();
+        _pendingFlora.Clear();
+        _scheduledFlora.Clear();
+        _toxicTimer = 0f;
+        _floraTimer = 0f;
     }
 
     public void Activate(EntityUid surfaceMap, EntityUid airMap, string claimCode)
