@@ -132,16 +132,16 @@ public sealed partial class OrganizationConsoleWindow
         AddTdfCounter(counters, "Відкриті справи", active, "#D9C48B", TdfReviewFilter.Open);
         AddTdfCounter(counters, "Архів справ", archive, "#91CBA2", TdfReviewFilter.Archive);
         var overview = BuildTitledPanel("Огляд нагляду", out var overviewBody);
-        overview.PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex("#222A31"),
-            BorderColor = Color.FromHex("#45515B"), BorderThickness = new Thickness(1) };
+        overview.PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex("#1A1D21") };
         overviewBody.AddChild(counters);
         _tdfBody.AddChild(overview);
 
         var layout = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
-            HorizontalExpand = true, VerticalExpand = true, SeparationOverride = 8 };
+            HorizontalExpand = true, VerticalExpand = true, SeparationOverride = 10 };
         var left = BuildTitledPanel("Журнал", out var leftBody, true);
         left.HorizontalExpand = false;
-        left.MinWidth = 290;
+        left.MinWidth = 300;
+        left.PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex("#1A1D21") };
         var filterRow = new BoxContainer { Orientation = LayoutOrientation.Horizontal, HorizontalExpand = true, SeparationOverride = 8 };
         filterRow.AddChild(new Label { Text = "Розділ журналу", FontColorOverride = Color.FromHex("#91A2B0") });
         var filter = new OptionButton { HorizontalExpand = true, MinHeight = 32 };
@@ -162,7 +162,9 @@ public sealed partial class OrganizationConsoleWindow
         layout.AddChild(left);
 
         var right = BuildTitledPanel("Матеріали перевірки", out var rightBody, true);
+        right.HorizontalExpand = true;
         right.MinWidth = 420;
+        right.PanelOverride = new StyleBoxFlat { BackgroundColor = Color.FromHex("#1A1D21") };
         var detailScroll = new ScrollContainer { HScrollEnabled = false, HorizontalExpand = true, VerticalExpand = true };
         detailScroll.AddChild(_tdfReviewDetail);
         rightBody.AddChild(detailScroll);

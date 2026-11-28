@@ -3,6 +3,8 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Content.Server.Database;
+using Content.Server.Players.PlayTimeTracking;
+using Content.Shared._Aspis.Organizations;
 using Content.Shared.CCVar;
 using Content.Shared.Preferences;
 using Robust.Server.Player;
@@ -23,6 +25,7 @@ namespace Content.Server.Preferences.Managers
         [Dependency] private IServerNetManager _netManager = default!;
         [Dependency] private IConfigurationManager _cfg = default!;
         [Dependency] private IServerDbManager _db = default!;
+        [Dependency] private PlayTimeTrackingManager _investmentPlaytime = default!;
         [Dependency] private IPlayerManager _playerManager = default!;
         [Dependency] private IDependencyCollection _dependencies = default!;
         [Dependency] private IPrototypeManager _protos = default!;
@@ -72,6 +75,7 @@ namespace Content.Server.Preferences.Managers
             }
 
             prefsData.Prefs = new PlayerPreferences(curPrefs.Characters, index, curPrefs.AdminOOCColor);
+            _investmentPlaytime.QueueRefreshTrackers(_playerManager.GetSessionById(userId));
 
             if (ShouldStorePrefs(message.MsgChannel.AuthType))
             {
@@ -115,6 +119,20 @@ namespace Content.Server.Preferences.Managers
                     profile = humanoid.WithBankBalance(HumanoidCharacterProfile.DefaultBalance);
             }
 
+            var resetInvestmentTime = !curPrefs.Characters.TryGetValue(slot, out var previousProfile) ||
+                previousProfile is not HumanoidCharacterProfile previousHumanoid ||
+                profile is not HumanoidCharacterProfile currentHumanoid ||
+                !string.Equals(previousHumanoid.Name.Trim(), currentHumanoid.Name.Trim(), StringComparison.OrdinalIgnoreCase);
+            if (_investmentPlaytime.IsInvestmentTrackerResetting(session, OrganizationInvestmentPlaytimeRules.Tracker(slot)))
+                return;
+            if (resetInvestmentTime && !await _investmentPlaytime.ResetInvestmentCharacterTime(session, slot))
+            {
+                _sawmill.Warning($"Character slot {slot} update blocked: investment timer reset unavailable for {userId}.");
+                return;
+            }
+            if (resetInvestmentTime)
+                curPrefs = prefsData.Prefs!;
+
             var profiles = new Dictionary<int, ICharacterProfile>(curPrefs.Characters)
 
             {
@@ -122,6 +140,7 @@ namespace Content.Server.Preferences.Managers
             };
 
             prefsData.Prefs = new PlayerPreferences(profiles, slot, curPrefs.AdminOOCColor);
+            _investmentPlaytime.QueueRefreshTrackers(session);
 
             if (ShouldStorePrefs(session.Channel.AuthType))
                 await _db.SaveCharacterSlotAsync(userId, profile, slot);
@@ -161,10 +180,23 @@ namespace Content.Server.Preferences.Managers
                 nextSlot = ns;
             }
 
-            var arr = new Dictionary<int, ICharacterProfile>(curPrefs.Characters);
+            if (!curPrefs.Characters.ContainsKey(slot))
+                return;
+            var session = _playerManager.GetSessionById(userId);
+            if (!await _investmentPlaytime.ResetInvestmentCharacterTime(session, slot))
+            {
+                _sawmill.Warning($"Character slot {slot} deletion blocked: investment timer reset unavailable for {userId}.");
+                return;
+            }
+            var arr = new Dictionary<int, ICharacterProfile>(prefsData.Prefs!.Characters);
             arr.Remove(slot);
+            if (arr.Count == 0)
+                return;
+            curPrefs = prefsData.Prefs!;
+            nextSlot = curPrefs.SelectedCharacterIndex == slot ? arr.Keys.First() : null;
 
             prefsData.Prefs = new PlayerPreferences(arr, nextSlot ?? curPrefs.SelectedCharacterIndex, curPrefs.AdminOOCColor);
+            _investmentPlaytime.QueueRefreshTrackers(session);
 
             if (ShouldStorePrefs(message.MsgChannel.AuthType))
             {

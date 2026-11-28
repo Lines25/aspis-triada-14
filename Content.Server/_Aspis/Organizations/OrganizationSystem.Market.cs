@@ -101,6 +101,9 @@ public sealed partial class OrganizationSystem
             args.Price is < 1 or > MaxQuote)
             return;
 
+        if (args.Side == OrganizationLimitOrderSide.Buy && !RequireInvestmentPlaytime(uid, actor))
+            return;
+
         var amount = (long)args.Quantity * args.Price;
         if (amount > int.MaxValue || company.MarketOrders.Count >= MaxLimitOrders ||
             (FindMarketWallet(company, key) == null && company.MarketCash.Count >= MaxMarketCashAccounts) ||

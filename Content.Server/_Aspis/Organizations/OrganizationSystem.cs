@@ -2713,6 +2713,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         var identity = Key(args.Player.UserId.ToString(), prefs.SelectedCharacterIndex, args.Profile.Name);
         _identityByBody[args.Mob] = identity;
         _displayNameByBody[args.Mob] = args.Profile.Name;
+        _investmentPlaytime.QueueRefreshTrackers(args.Player);
         if (TryTdfRankFromJob(args.JobId, out var rank, out var grade))
             _tdfRankByBody[args.Mob] = (rank, grade);
         TrackTdfDuty(args.Mob, identity);
@@ -3443,6 +3444,9 @@ public sealed partial class OrganizationSystem : EntitySystem
             !_organizations.TryGetValue(args.Organization, out var org) ||
             org.Kind != OrganizationKind.Company || !_store.Available ||
             IsTradingSuspended(org) || args.Order is not (OrganizationStockOrder.Buy or OrganizationStockOrder.Sell or OrganizationStockOrder.Issue) || args.Quantity is < 1 or > MaxTradeQuantity)
+            return;
+
+        if (args.Order == OrganizationStockOrder.Buy && !RequireInvestmentPlaytime(uid, actor))
             return;
 
         var holderKey = (key.UserId, key.Slot);

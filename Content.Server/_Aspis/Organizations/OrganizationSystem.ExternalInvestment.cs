@@ -49,6 +49,9 @@ public sealed partial class OrganizationSystem
                 Refresh(uid, actor, "Внесок недоступний: перевірте суму та стан організації.");
             return;
         }
+        if (!RequireInvestmentPlaytime(uid, actor))
+            return;
+
         var existing = org.ExternalInvestors.FirstOrDefault(i => i.UserId == key.UserId && i.Slot == key.Slot);
         if ((existing == null && org.ExternalInvestors.Count >= MaxExternalInvestors) ||
             (existing != null && existing.Amount > MaxRecordedInvestorCapital - args.Amount))

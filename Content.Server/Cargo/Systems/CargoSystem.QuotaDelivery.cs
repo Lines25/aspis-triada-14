@@ -15,7 +15,7 @@ namespace Content.Server.Cargo.Systems;
 public sealed partial class CargoSystem
 {
     private sealed class QuotaOrderAuthorization(Guid organization, string code, int total, int start,
-        int[] postTargets, bool frontier)
+        int[] postTargets, bool frontier, EntityUid sourceStation)
     {
         public readonly Guid Organization = organization;
         public readonly string Code = code;
@@ -23,6 +23,7 @@ public sealed partial class CargoSystem
         public readonly int Start = start;
         public readonly int[] PostTargets = postTargets;
         public readonly bool Frontier = frontier;
+        public readonly EntityUid SourceStation = sourceStation;
     }
 
     private const string QuotaTradeCratePrototype = "CrateTradeSecureNormal";
@@ -35,10 +36,29 @@ public sealed partial class CargoSystem
             !TryComp<TradeCrateDestinationComponent>(station, out var destination) ||
             destination.DestinationProto.Id != "Trade")
             return false;
-        var name = MetaData(id).EntityName;
-        return string.Equals(name, "Auric Trade Center", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(name, "Auric Trade Mall", StringComparison.OrdinalIgnoreCase) ||
-               string.Equals(name, "Trade Mall", StringComparison.OrdinalIgnoreCase);
+        return IsQuotaTradeHubName(MetaData(id).EntityName) ||
+               IsQuotaTradeHubName(MetaData(station).EntityName);
+    }
+
+    private static bool IsQuotaTradeHubName(string name) =>
+        string.Equals(name, "Auric Trade Center", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "Auric Trade Mall", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(name, "Trade Mall", StringComparison.OrdinalIgnoreCase);
+
+    private bool IsActiveFrontierAuthorization(QuotaOrderAuthorization authorization) =>
+        EntityManager.System<OrganizationSystem>().IsActiveFrontierCargoOrder(authorization.Organization,
+            authorization.Code, authorization.Total);
+
+    private bool CanDispatchQuotaOrder(CargoOrderData order, EntityUid? grid)
+    {
+        if (!_quotaOrders.TryGetValue(order, out var auth))
+            return true;
+
+        // The linked pad must belong to the same server-authorized station
+        // as the issuing Cargo Requests console, not a mutable grid name.
+        return grid is { Valid: true } id && !Deleted(id) &&
+               _station.GetOwningStation(id) == auth.SourceStation &&
+               (auth.Frontier ? IsActiveFrontierAuthorization(auth) : TryGetQuotaTradeDestination(3, out _));
     }
 
     private void ResetQuotaDeliveryRound() => _quotaOrders.Clear();
@@ -76,16 +96,17 @@ public sealed partial class CargoSystem
             _station.GetOwningStation(crate) == destination;
     }
 
-    private void StampQuotaCrate(CargoOrderData order, EntityUid crate)
+    private bool StampQuotaCrate(CargoOrderData order, EntityUid crate)
     {
-        if (!_quotaOrders.TryGetValue(order, out var authorization) ||
-            order.NumDispatched is < 1 or > 40)
-            return;
+        if (!_quotaOrders.TryGetValue(order, out var authorization))
+            return true;
+        if (order.NumDispatched < 1 || order.NumDispatched > order.OrderQuantity)
+            return false;
 
         // PopFrontOrder increments NumDispatched before FulfillOrder is called.
         var absoluteIndex = authorization.Start + order.NumDispatched - 1;
         if (absoluteIndex < 0 || absoluteIndex >= authorization.Total)
-            return;
+            return false;
         var post = 0;
         var upperBound = 0;
         for (; post < 4; post++)
@@ -95,33 +116,39 @@ public sealed partial class CargoSystem
                 break;
         }
         if (post >= 4)
-            return;
-        if (!TryGetQuotaTradeDestination(post, out var destination))
-            return;
+            return false;
+        // Frontier crates are delivered to the remote receiving terminal,
+        // not to ordinary sector trade posts. The source hub supplies the icon.
+        var destination = authorization.SourceStation;
+        if (!authorization.Frontier && !TryGetQuotaTradeDestination(post, out destination))
+            return false;
 
         // Keep the same crate visuals, station labels and destination icon as
         // Frontier's ordinary trade crates, not a generic steel crate.
         if (!TryComp<TradeCrateComponent>(crate, out var trade) ||
             !TryComp<TradeCrateDestinationComponent>(destination, out var destComp))
-            return;
+            return false;
         trade.DestinationStation = destination;
         // The separate quota settlement is the ONLY payout for these crates.
         // They must never generate additional market cash when sold or stolen.
         trade.ValueAtDestination = 0;
         trade.ValueElsewhere = 0;
         _appearance.SetData(crate, TradeCrateVisuals.DestinationIcon, destComp.DestinationProto.Id);
-        _label.Label(crate, MetaData(destination).EntityName);
+        _label.Label(crate, authorization.Frontier
+            ? $"Далекий рубіж / {(char)('A' + post)}"
+            : MetaData(destination).EntityName);
 
         var tag = EnsureComp<OrganizationQuotaCrateComponent>(crate);
         tag.Organization = authorization.Organization;
         tag.Code = authorization.Code;
         tag.Reference = $"CRATE-{Guid.NewGuid():N}";
         tag.Post = post;
-        tag.DestinationStation = destination;
+        tag.DestinationStation = authorization.Frontier ? EntityUid.Invalid : destination;
         _metaSystem.SetEntityName(crate, authorization.Frontier
             ? $"Далекий рубіж: {(char)('A' + post)} — {authorization.Code}"
             : $"Квота {authorization.Code} | Пост {(char)('A' + post)} | {MetaData(destination).EntityName}");
         _adminLogger.Add(Content.Shared.Database.LogType.Action, Content.Shared.Database.LogImpact.Low,
             $"Quota crate dispatched: {tag.Reference} code={tag.Code} post={(char)('A' + post)} destination={destination}");
+        return true;
     }
 }

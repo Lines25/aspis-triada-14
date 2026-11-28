@@ -37,21 +37,39 @@ public sealed partial class CargoSystem
             // Don't EntityQuery for it as it's not required.
             TryComp<AppearanceComponent>(uid, out var appearance);
 
+            // A power/anchor event alone is insufficient: never consume a shipment
+            // on an unpowered or unanchored pad, and resume after power is restored.
+            if (!TryComp<ApcPowerReceiverComponent>(uid, out var receiver) ||
+                !receiver.Powered || !Transform(uid).Anchored)
+            {
+                comp.CurrentState = CargoTelepadState.Unpowered;
+                _appearance.SetData(uid, CargoTelepadVisuals.State, CargoTelepadState.Unpowered, appearance);
+                comp.Accumulator = comp.Delay;
+                continue;
+            }
             if (comp.CurrentState == CargoTelepadState.Unpowered)
             {
                 comp.CurrentState = CargoTelepadState.Idle;
                 _appearance.SetData(uid, CargoTelepadVisuals.State, CargoTelepadState.Idle, appearance);
                 comp.Accumulator = comp.Delay;
-                continue;
             }
 
-            if (!TryComp<DeviceLinkSinkComponent>(uid, out var sinkComponent) ||
-                sinkComponent.LinkedSources.FirstOrNull() is not { } console ||
-                !HasComp<CargoOrderConsoleComponent>(console))
+            if (!TryComp<DeviceLinkSinkComponent>(uid, out var sinkComponent))
             {
                 comp.Accumulator = comp.Delay;
                 continue;
             }
+
+            // A pad may have other linked devices. Select a real Cargo Requests
+            // console instead of stopping at an unrelated first source.
+            var consoles = sinkComponent.LinkedSources
+                .Where(source => HasComp<CargoOrderConsoleComponent>(source)).ToArray();
+            if (consoles.Length == 0)
+            {
+                comp.Accumulator = comp.Delay;
+                continue;
+            }
+            var console = consoles[0];
 
             comp.Accumulator -= frameTime;
 
@@ -73,7 +91,9 @@ public sealed partial class CargoSystem
             }
 
             // Frontier - This makes sure telepads spawn goods of linked computers only. //TODO: FIx This Again
-            List<NetEntity> consoleUidList = sinkComponent.LinkedSources.Select(item => EntityManager.GetNetEntity(item)).ToList();
+            List<NetEntity> consoleUidList = consoles
+                .Where(source => _station.GetOwningStation(source) == station)
+                .Select(source => EntityManager.GetNetEntity(source)).ToList();
 
             var xform = Transform(uid);
             if (FulfillNextOrder(consoleUidList, orderDatabase, xform.Coordinates, comp.PrinterOutput, xform.GridUid))
@@ -138,7 +158,7 @@ public sealed partial class CargoSystem
         var disabled = !receiver.Powered || !xform.Anchored;
 
         // Setting idle state should be handled by Update();
-        if (disabled)
+        if (!disabled)
             return;
 
         TryComp<AppearanceComponent>(uid, out var appearance);

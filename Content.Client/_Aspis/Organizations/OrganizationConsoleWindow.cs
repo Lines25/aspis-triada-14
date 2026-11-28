@@ -595,11 +595,24 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
 
     private Control BuildTdfView()
     {
-        var panel = BuildTitledPanel("TDF / Фінансовий нагляд", out var content, true);
+        // Use the same free-standing panel layout as the quota tab.
+        var root = new BoxContainer
+        {
+            Orientation = LayoutOrientation.Vertical,
+            HorizontalExpand = true,
+            VerticalExpand = true,
+            SeparationOverride = 8
+        };
+        root.AddChild(new Label
+        {
+            Text = "TDF / Фінансовий нагляд",
+            FontColorOverride = Color.FromHex("#C8D7E8")
+        });
         _tdfBody.HorizontalExpand = true;
         _tdfBody.VerticalExpand = true;
-        content.AddChild(_tdfBody);
-        return panel;
+        _tdfBody.SeparationOverride = 10;
+        root.AddChild(_tdfBody);
+        return root;
     }
 
     // Collapsible sections keep the overview readable without removing details.

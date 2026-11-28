@@ -86,6 +86,12 @@ public sealed partial class PlayTimeTrackingSystem : EntitySystem
 
         trackers.Add(PlayTimeTrackingShared.TrackerOverall);
         trackers.UnionWith(GetTimedRoles(player));
+
+        // The native AFK/alive checks above apply to character time as well.
+        if (EntityManager.System<Content.Server._Aspis.Organizations.OrganizationSystem>()
+                .TryGetInvestmentPlaytimeTracker(player, out var tracker) &&
+            !_tracking.IsInvestmentTrackerResetting(player, tracker))
+            trackers.Add(tracker);
     }
 
     private bool IsPlayerAlive(ICommonSession session)

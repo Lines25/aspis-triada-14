@@ -1,6 +1,8 @@
 using System.Diagnostics.CodeAnalysis;
 using System.Numerics;
 using Content.Shared.ActionBlocker;
+using Content.Shared._Aspis.Organizations;
+using Robust.Shared.Maths;
 using Content.Shared.CCVar;
 using Content.Shared.Friction;
 using Content.Shared.Gravity;
@@ -284,6 +286,27 @@ public abstract partial class SharedMoverController : VirtualController
             var walkSpeed = moveSpeedComponent?.CurrentWalkSpeed ?? MovementSpeedModifierComponent.DefaultBaseWalkSpeed;
             var sprintSpeed = moveSpeedComponent?.CurrentSprintSpeed ?? MovementSpeedModifierComponent.DefaultBaseSprintSpeed;
 
+            // The streamed wheatland can itself be the map grid. Use the same
+            // shared movement simulation on client and server, never a timed debuff.
+            if (physicsComponent.BodyStatus == BodyStatus.OnGround &&
+                !HasComp<AspisPlanetaryLandingComponent>(uid))
+            {
+                if (tileDef == null && xform.GridUid == null && xform.MapUid is { } surface &&
+                    TryComp<AspisPlanetaryRadarComponent>(surface, out var planet) && planet.Surface &&
+                    MapGridQuery.TryComp(surface, out var surfaceGrid))
+                {
+                    var position = xform.WorldPosition;
+                    var index = new Vector2i((int)MathF.Floor(position.X), (int)MathF.Floor(position.Y));
+                    if (_mapSystem.TryGetTileRef(surface, surfaceGrid, index, out var surfaceTile))
+                        tileDef = (ContentTileDefinition)_tileDefinitionManager[surfaceTile.Tile.TypeId];
+                }
+                if (tileDef?.ID == "FloorAspisWheat")
+                {
+                    const float wheatSpeed = 0.70f;
+                    walkSpeed *= wheatSpeed;
+                    sprintSpeed *= wheatSpeed;
+                }
+            }
             wishDir = AssertValidWish(mover, walkSpeed, sprintSpeed);
 
             if (wishDir != Vector2.Zero)

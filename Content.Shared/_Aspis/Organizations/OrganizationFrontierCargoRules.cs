@@ -6,6 +6,9 @@ public static class OrganizationFrontierCargoRules
     public const int Minimum = 20;
     public const int Maximum = 80;
     public const int Default = 40;
+    public const int MaximumBatch = 20;
+    public static int NextBatch(int remaining, int freeCapacity) =>
+        System.Math.Max(0, System.Math.Min(MaximumBatch, System.Math.Min(remaining, freeCapacity)));
     public static bool Valid(int count) => count >= Minimum && count <= Maximum;
     // 20/40/80 units => 0.35% / 0.55% / 0.95%; never more than 1.10%.
     public static int InfluenceBasisPoints(int count) => Valid(count) ? System.Math.Min(110, 15 + count) : 0;

@@ -173,7 +173,7 @@ public sealed partial class OrganizationSystem
         _organizationMetadata.SetEntityName(item, $"Маршрут: {claim.Code}");
         _hands.TryPickupAnyHand(actor, item);
         _quotaPopup.PopupEntity($"Видано маршрутний модуль. Замовте {claim.Units} ящиків " +
-            "партіями до 20 через Cargo Requests. Завантажте все на один шатл. " +
+            "через Cargo Requests: схваліть першу партію, наступні надійдуть автоматично. Завантажте все на один шатл. " +
             "Після отримання допуску запускайте маршрут із кабіни.", actor, actor);
     }
 

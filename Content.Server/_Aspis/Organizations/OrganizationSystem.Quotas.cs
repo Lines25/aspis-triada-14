@@ -175,7 +175,10 @@ public sealed partial class OrganizationSystem
             OrganizationQuotaWorkflow.AgriculturalExport => 1,
             _ => OrganizationQuotaRules.MaximumUnits(slot)
         };
-        var unitsToDeliver = _random.Next(minimum, maximum + 1);
+        // The advertised frontier workload is the same default shown by the client.
+        var unitsToDeliver = workflow == OrganizationQuotaWorkflow.CargoDelivery && slot == 3
+            ? OrganizationFrontierCargoRules.Default
+            : _random.Next(minimum, maximum + 1);
         var pharmaceuticalVariant = workflow == OrganizationQuotaWorkflow.PharmaceuticalExport
             ? ChoosePharmaceuticalVariant(slot) : 0;
         if (pharmaceuticalVariant < 0)
@@ -189,7 +192,11 @@ public sealed partial class OrganizationSystem
             return null;
 
         var targets = new int[4];
-        if (workflow == OrganizationQuotaWorkflow.CargoDelivery)
+        if (selected.Id == FrontierScenarioId)
+        {
+            targets = OrganizationFrontierCargoRules.Destinations(unitsToDeliver);
+        }
+        else if (workflow == OrganizationQuotaWorkflow.CargoDelivery)
         {
             // Different delivery scenarios have actual, distinct physical A-D routes.
             var numberOfPosts = _random.Next(selected.MinDestinations,
@@ -355,7 +362,9 @@ public sealed partial class OrganizationSystem
                             FactionWreckActivityFor((OrganizationFactionFocus)category)) :
                         OrganizationQuotaRules.WorkflowName(workflow)), units,
                     OrganizationQuotaRules.IncomeBonusPercent(slot),
-                    QuotaWorkloadInfluenceBp(workflow, slot), mine, mine && claim!.Completed)
+                    offer.Scenario.Id == FrontierScenarioId
+                        ? OrganizationFrontierCargoRules.InfluenceBasisPoints(units)
+                        : QuotaWorkloadInfluenceBp(workflow, slot), mine, mine && claim!.Completed)
                 {
                     Workflow = workflow,
                     ScenarioId = offer.Scenario.Id,
@@ -476,8 +485,31 @@ public sealed partial class OrganizationSystem
             Refresh(uid, args.Actor, "Немає доступного сценарію з реальним підтвердженням виконання.");
             return;
         }
+        // The client sends a requested workload, not a delivery proof. Validate it
+        // once and freeze a private offer so the shared catalog cannot mutate it.
+        if (offer.Scenario.Id == FrontierScenarioId)
+        {
+            if (!OrganizationFrontierCargoRules.Valid(args.FrontierCrates) ||
+                _frontierRoutesAllocatedThisRound >= MaximumFrontierRoutesPerRound)
+            {
+                Refresh(uid, args.Actor, "Далекий рубіж: оберіть від 20 до 80 ящиків; має бути доступний маршрут.");
+                return;
+            }
+            var count = args.FrontierCrates;
+            var work = QuotaWorkEstimateMinutes(offer.Scenario, count, args.Slot, offer.PharmaceuticalVariant);
+            var minutes = Math.Max(OrganizationQuotaRules.TimeLimitForUnits(args.Slot, count),
+                work + offer.Scenario.SafetyMinutes);
+            if (minutes > offer.Scenario.MaxContractMinutes)
+            {
+                Refresh(uid, args.Actor, "Обрана кількість не вкладається у термін контракту.");
+                return;
+            }
+            offer = new SectorQuotaOffer(count, minutes, OrganizationFrontierCargoRules.Destinations(count),
+                offer.PharmaceuticalVariant, offer.Scenario, work, offer.ScenarioVariant);
+        }
         // Fail closed when physical delivery infrastructure has not spawned.
         if (org.Kind == OrganizationKind.Company &&
+            offer.Scenario.Id != FrontierScenarioId &&
             offer.Scenario.Workflow is OrganizationQuotaWorkflow.CargoDelivery or
                 OrganizationQuotaWorkflow.PharmaceuticalExport)
         {
@@ -538,6 +570,13 @@ public sealed partial class OrganizationSystem
         RefreshSectorQuotaSubscribers(uid, args.Actor,
             $"Замовлення {code} закріплено за вами. Перегляньте його в КПК.");
     }
+
+    // Cargo may only continue a server-issued, still-active frontier order.
+    public bool IsActiveFrontierCargoOrder(Guid organization, string code, int total) =>
+        _store.Available && _sectorQuotaClaims.Values.Any(claim =>
+            claim.Organization == organization && claim.Code == code &&
+            claim.Scenario.Id == FrontierScenarioId && claim.Units == total &&
+            !claim.Completed && !claim.FrontierDeparted && _gameTiming.CurTime < claim.Deadline);
 
     private void OnReleaseQuota(EntityUid uid, OrganizationConsoleComponent comp, OrganizationReleaseQuotaMessage args)
     {
@@ -758,7 +797,9 @@ public sealed partial class OrganizationSystem
             var free = Math.Max(0, MarketCapacityBp -
                 _organizations.Values.Sum(o => o.SectorInfluenceBp));
             org.SectorInfluenceBp += Math.Min(free,
-                QuotaWorkloadInfluenceBp(workflow, slot));
+                assigned?.Scenario.Id == FrontierScenarioId
+                    ? OrganizationFrontierCargoRules.InfluenceBasisPoints(units)
+                    : QuotaWorkloadInfluenceBp(workflow, slot));
         }))
             return false;
         _adminLog.Add(LogType.Action, LogImpact.Medium,
