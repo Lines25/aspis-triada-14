@@ -85,6 +85,7 @@
     understands:
     - TauCetiBasic
     - Chittin # Until they have a species-specific
+    naturalLanguage: Chittin
   - type: Sprite # I'd prefer if these maps were better. Insert map pun here.
     layers:
       - map: [ "enum.HumanoidVisualLayers.TailBehind" ] # DEN
@@ -134,6 +135,8 @@
         sprite: "Effects/creampie.rsi"
         state: "creampie_arachnid"
         visible: false
+      - map: [ "plasmaburn" ] # Triad - plasma burn
+        shader: unshaded
   - type: Inventory
     templateId: arachnid
     speciesId: arachnid

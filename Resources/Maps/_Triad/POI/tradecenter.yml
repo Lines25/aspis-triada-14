@@ -33196,6 +33196,8 @@ entities:
     - type: DeviceNetwork
       deviceLists:
       - 3123
+      configurators:
+      - invalid
     - type: AtmosPipeLayers
       pipeLayer: Secondary
   - uid: 2605
@@ -33920,6 +33922,8 @@ entities:
     - type: DeviceNetwork
       deviceLists:
       - 3123
+      configurators:
+      - invalid
     - type: AtmosPipeLayers
       pipeLayer: Tertiary
   - uid: 2199
