@@ -22,6 +22,15 @@
       state: generic_keys
   - type: OrganizationConsole
   - type: OrganizationConsoleLeaseSlot
+    cardSlot:
+      whitelist:
+        components:
+        - IdCard
+      blacklist:
+        components:
+        - Pda
+      swap: false
+      ejectOnBreak: true
   - type: ItemSlots
   - type: ContainerContainer
     containers:

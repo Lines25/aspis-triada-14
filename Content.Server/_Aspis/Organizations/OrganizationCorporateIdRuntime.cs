@@ -34,5 +34,5 @@ public sealed partial class OrganizationLeaseCardBindingComponent : Component
 public sealed partial class OrganizationConsoleLeaseSlotComponent : Component
 {
     public const string SlotId = "Aspis-OrganizationConsole-LeaseId";
-    public ItemSlot CardSlot = new();
+    [DataField] public ItemSlot CardSlot = new();
 }

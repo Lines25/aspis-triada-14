@@ -497,6 +497,8 @@ public sealed class OrganizationConsoleState(
     public OrganizationMemberEntry[] Members = members;
     public OrganizationApplicationEntry[] Applications = applications;
     public string Notice = notice;
+    // Private snapshot of the current organization's one-time purchase, independent of its active mode.
+    public bool PrivateAccessPurchased;
     public long Treasury = treasury;
     public int PersonalBalance = personalBalance;
     public int InitialInvestment = initialInvestment;

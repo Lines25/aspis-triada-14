@@ -46,7 +46,7 @@ public sealed partial class OrganizationSystem : EntitySystem
     private static readonly TimeSpan PostExitWait = TimeSpan.FromMinutes(15);
     private readonly Dictionary<CharacterKey, DateTime> _lastDepartureUtc = new();
     private const int RegistrationFee = 500_000;
-    private const int PrivateRegistrationSurcharge = 75_000;
+    private const int PrivateRegistrationSurcharge = OrganizationPrivateEntryRules.Price;
     private const int FactionRegistrationSurcharge = 100_000;
 
     private static int FoundingCost(OrganizationKind kind, bool isPrivate) =>
@@ -1649,7 +1649,7 @@ public sealed partial class OrganizationSystem : EntitySystem
                 InvestorsPublic = data.InvestorsPublic,
                 ExternalInvestors = data.ExternalInvestors ?? new(),
                 // A private organization created before this version already paid at registration.
-                PrivateAccessPurchased = data.PrivateAccessPurchased || data.IsPrivate,
+                PrivateAccessPurchased = OrganizationPrivateEntryRules.RestorePurchase(data.PrivateAccessPurchased, data.IsPrivate),
                 FactionFocus = data.Kind == OrganizationKind.Faction && Enum.IsDefined(data.FactionFocus)
                     ? data.FactionFocus : OrganizationFactionFocus.None,
                 FactionFoci = data.Kind == OrganizationKind.Faction
@@ -2324,7 +2324,7 @@ public sealed partial class OrganizationSystem : EntitySystem
         }
         // Registration charged this exact surcharge. A later upgrade must
         // charge it too, only once, and never be enabled by forging a UI message.
-        var privateUpgrade = args.IsPrivate && !org.PrivateAccessPurchased;
+        var privateUpgrade = OrganizationPrivateEntryRules.RequiresPurchase(args.IsPrivate, org.PrivateAccessPurchased);
         if (privateUpgrade)
         {
             if (!TryGetCharacter(actor, out var ownerKey, out _) || org.Owner != ownerKey)
@@ -2334,7 +2334,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             }
             if (!_bank.TryBankWithdraw(actor, PrivateRegistrationSurcharge))
             {
-                Refresh(uid, actor, $"Для приватного вступу потрібно {PrivateRegistrationSurcharge:N0} $ на особистому рахунку.");
+                Refresh(uid, actor, $"Недостатньо коштів: приватний вступ — {PrivateRegistrationSurcharge:N0} $.");
                 return;
             }
         }
@@ -2343,8 +2343,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             org.Name = newName;
             org.EntryFee = args.EntryFee;
             org.IsPrivate = args.IsPrivate;
-            if (privateUpgrade)
-                org.PrivateAccessPurchased = true;
+            org.PrivateAccessPurchased = OrganizationPrivateEntryRules.RestorePurchase(org.PrivateAccessPurchased, args.IsPrivate);
             org.RosterPublic = args.RosterPublic;
             org.Color = color;
             if (args.UpdateMaterialsLink)
@@ -3839,6 +3838,7 @@ public sealed partial class OrganizationSystem : EntitySystem
             NextLevelExperience = membership == null ? 0 : ExperienceNeeded(membership.CompanyLevel),
             CanManagePersonnel = (canOperate && (managerPermissions & OrganizationPermission.Personnel) != 0) ||
                 (onTdfDuty && canOperate && tdfCanPersonnel && tdfTerminal),
+            PrivateAccessPurchased = canOperate && membership != null && membership.PrivateAccessPurchased,
             UserPermissions = canOperate ? managerPermissions : OrganizationPermission.None,
             DeputyPermissions = membership?.DeputyPermissions ?? OrganizationPermission.None,
             OfficerPermissions = membership?.OfficerPermissions ?? OrganizationPermission.None,

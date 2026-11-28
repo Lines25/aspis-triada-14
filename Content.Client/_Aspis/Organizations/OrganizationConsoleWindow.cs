@@ -277,7 +277,7 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
     }
 
     private static int FoundingPrice(OrganizationKind kind, bool isPrivate) =>
-        500_000 + (isPrivate ? 75_000 : 0) + (kind == OrganizationKind.Faction ? 100_000 : 0);
+        500_000 + (isPrivate ? OrganizationPrivateEntryRules.Price : 0) + (kind == OrganizationKind.Faction ? 100_000 : 0);
 
 
     private OrganizationConsoleState? _state;
@@ -1340,7 +1340,7 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
                 _state.FactionAuthorityPoints >= neededAuthority;
             var card = BuildTitledPanel(label, out var detail);
             AddMetric(detail, "Рівень програми", $"{level}/5");
-            detail.AddChild(new Label { Text = description,
+            detail.AddChild(new Label { Text = WrapText(description, 40),
                 FontColorOverride = Color.FromHex("#A9BBCA") });
             var squares = new BoxContainer { Orientation = LayoutOrientation.Horizontal, SeparationOverride = 4 };
             for (var i = 0; i < 5; i++)
@@ -2910,51 +2910,8 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
         AddMetric(summaryBody, "Скарбниця", $"{_state.Treasury:N0} $");
         AddMetric(summaryBody, "Початковий капітал", $"{_state.InitialInvestment:N0} $");
         _managementBody.AddChild(summary);
-        if (org.Kind == OrganizationKind.Faction)
-        {
-            var network = BuildFoldout("Підсумки діяльності та архів", out var networkBody, false);
-            AddMetric(networkBody, "Зареєстровано вузлів", _state.FactionNodeCount.ToString(),
-                Color.FromHex("#A4D4B2"));
-            AddMetric(networkBody, "Зареєстровано досліджень", _state.FactionFindingCount.ToString(),
-                Color.FromHex("#A4D4B2"));
-            AddMetric(networkBody, "Авторитет фракції", _state.FactionAuthorityPoints.ToString());
-            AddMetric(networkBody, "Вплив у секторі", $"{org.InfluencePercent:0.00}%", Color.FromHex("#A4D4B2"));
-            AddMetric(networkBody, "Частка зареєстрованої мережі",
-                $"{_state.FactionNetworkSharePercent:0.0}%", Color.FromHex("#A4D4B2"));
-            AddMetric(networkBody, "Затримка між завданнями",
-                _state.FactionAuthorityPoints >= 50 ? "2 хв" :
-                _state.FactionAuthorityPoints >= 20 ? "3 хв" : "4 хв");
-            AddMetric(networkBody, "Завершено завдань", _state.FactionOperationsCompleted.ToString());
-            AddMetric(networkBody, "Стабілізація на ділянці",
-                $"{_state.FactionSignalSeconds} с (основа — 40 с)", Color.FromHex("#A4D4B2"));
-            foreach (var node in _state.FactionNodes)
-            {
-                var site = string.IsNullOrWhiteSpace(node.SiteCode)
-                    ? "історичний запис" : node.SiteCode;
-                AddMetric(networkBody, OrganizationFactionNodeRules.Name(node.Kind),
-                    $"{site} — {node.EstablishedUtc:dd.MM.yyyy} — " +
-                    (node.ActiveThisRound ? "антена присутня у цій зміні" : "архів / неактивний"),
-                    node.ActiveThisRound ? Color.FromHex("#A4D4B2") : Color.FromHex("#B8C7D5"));
-                if (node.ActiveThisRound && !string.IsNullOrEmpty(node.RoundLocation))
-                    AddMetric(networkBody, "Поточне розташування", node.RoundLocation);
-            }
-            foreach (var finding in _state.FactionFindings)
-            {
-                AddMetric(networkBody, "Архів: " + finding.SiteCode,
-                    $"{finding.SiteName} — {finding.RecordedUtc:dd.MM.yyyy}",
-                    Color.FromHex("#AAC7D6"));
-            }
-            networkBody.AddChild(new Label
-            {
-                Text = "Секторна присутність зростає від фактично завершених завдань і програм розвитку. Частка ретрансляторів відображається окремо. Авторитет відкриває нові рівні програм і скорочує відновлення між завданнями.",
-                FontColorOverride = Color.FromHex("#9DB7C8")
-            });
-            _managementBody.AddChild(network);
-        }
-        if (org.Kind == OrganizationKind.Faction)
-            _managementBody.AddChild(BuildFactionProgressPanel(org));
-        // Corporate outpost ownership and rental controls are exclusive to "Активи".
-        if (HasRight(OrganizationPermission.Settings))
+        // Both factions and companies use exactly the same personalization controls.
+        if (!_state!.ViewingAnotherCharacter && HasRight(OrganizationPermission.Settings))
         {
             var personal = BuildFoldout("Персоналізація", out var personalBody,
                 _personalizationExpanded, expanded => _personalizationExpanded = expanded);
@@ -3003,13 +2960,14 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
             personalBody.AddChild(new Label { Text = "Вступний внесок" });
             personalBody.AddChild(fee);
             personalBody.AddChild(isPrivate);
-            if (!org.IsPrivate)
-                personalBody.AddChild(new Label
-                {
-                    Text = "Приватний вступ: одноразова оплата 75 000 $ з особистого рахунку власника, " +
-                           "якщо опція ще не була придбана. Повторної оплати немає.",
-                    FontColorOverride = Color.FromHex("#E1BD88")
-                });
+            var purchased = _state.PrivateAccessPurchased || org.IsPrivate;
+            personalBody.AddChild(new Label
+            {
+                Text = purchased ? "Приватний вступ: придбано" : $"Одноразово: {OrganizationPrivateEntryRules.Price:N0} $",
+                FontColorOverride = Color.FromHex(purchased ? "#91CBA2" : "#E1BD88")
+            });
+            if (!purchased)
+                isPrivate.ToolTip = "Оплачується з особистого рахунку власника лише один раз.";
             personalBody.AddChild(publicRoster);
             var bannerLine = new BoxContainer { Orientation = LayoutOrientation.Horizontal,
                 SeparationOverride = 10, HorizontalExpand = true };
@@ -3031,17 +2989,22 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
             };
             bannerLine.AddChild(logo);
             personalBody.AddChild(bannerLine);
-            _personalizationBannerStatus = new Label { Text = _personalizationBannerStatusText };
+            _personalizationBannerStatus = new Label { Text = WrapText(_personalizationBannerStatusText, 36) };
             personalBody.AddChild(_personalizationBannerStatus);
             var savePersonal = new Button { Text = "Зберегти персоналізацію", MinHeight = 34 };
             var confirmPrivatePurchase = false;
+            isPrivate.OnToggled += _ =>
+            {
+                confirmPrivatePurchase = false;
+                savePersonal.Text = "Зберегти персоналізацію";
+            };
             savePersonal.OnPressed += _ =>
             {
                 // Prevent an accidental paid upgrade with a single click.
-                if (isPrivate.Pressed && !org.IsPrivate && !confirmPrivatePurchase)
+                if (OrganizationPrivateEntryRules.RequiresPurchase(isPrivate.Pressed, purchased) && !confirmPrivatePurchase)
                 {
                     confirmPrivatePurchase = true;
-                    savePersonal.Text = "Підтвердити приватний вступ";
+                    savePersonal.Text = $"Підтвердити {OrganizationPrivateEntryRules.Price:N0} $";
                     return;
                 }
                 ConfigureRequested?.Invoke(org.Id, isPrivate.Pressed,
@@ -3052,6 +3015,49 @@ public sealed partial class OrganizationConsoleWindow : DefaultWindow
             personalBody.AddChild(savePersonal);
             _managementBody.AddChild(personal);
         }
+        if (org.Kind == OrganizationKind.Faction)
+        {
+            var network = BuildFoldout("Підсумки діяльності та архів", out var networkBody, false);
+            AddMetric(networkBody, "Зареєстровано вузлів", _state.FactionNodeCount.ToString(),
+                Color.FromHex("#A4D4B2"));
+            AddMetric(networkBody, "Зареєстровано досліджень", _state.FactionFindingCount.ToString(),
+                Color.FromHex("#A4D4B2"));
+            AddMetric(networkBody, "Авторитет фракції", _state.FactionAuthorityPoints.ToString());
+            AddMetric(networkBody, "Вплив у секторі", $"{org.InfluencePercent:0.00}%", Color.FromHex("#A4D4B2"));
+            AddMetric(networkBody, "Частка зареєстрованої мережі",
+                $"{_state.FactionNetworkSharePercent:0.0}%", Color.FromHex("#A4D4B2"));
+            AddMetric(networkBody, "Затримка між завданнями",
+                _state.FactionAuthorityPoints >= 50 ? "2 хв" :
+                _state.FactionAuthorityPoints >= 20 ? "3 хв" : "4 хв");
+            AddMetric(networkBody, "Завершено завдань", _state.FactionOperationsCompleted.ToString());
+            AddMetric(networkBody, "Стабілізація на ділянці",
+                $"{_state.FactionSignalSeconds} с (основа — 40 с)", Color.FromHex("#A4D4B2"));
+            foreach (var node in _state.FactionNodes)
+            {
+                var site = string.IsNullOrWhiteSpace(node.SiteCode)
+                    ? "історичний запис" : node.SiteCode;
+                AddMetric(networkBody, OrganizationFactionNodeRules.Name(node.Kind),
+                    $"{site} — {node.EstablishedUtc:dd.MM.yyyy} — " +
+                    (node.ActiveThisRound ? "антена присутня у цій зміні" : "архів / неактивний"),
+                    node.ActiveThisRound ? Color.FromHex("#A4D4B2") : Color.FromHex("#B8C7D5"));
+                if (node.ActiveThisRound && !string.IsNullOrEmpty(node.RoundLocation))
+                    AddMetric(networkBody, "Поточне розташування", WrapText(node.RoundLocation, 26));
+            }
+            foreach (var finding in _state.FactionFindings)
+            {
+                AddMetric(networkBody, "Архів: " + finding.SiteCode,
+                    $"{finding.SiteName} — {finding.RecordedUtc:dd.MM.yyyy}",
+                    Color.FromHex("#AAC7D6"));
+            }
+            networkBody.AddChild(new Label
+            {
+                Text = WrapText("Секторна присутність зростає від фактично завершених завдань і програм розвитку. Частка ретрансляторів відображається окремо. Авторитет відкриває нові рівні програм і скорочує відновлення між завданнями.", 40),
+                FontColorOverride = Color.FromHex("#9DB7C8")
+            });
+            _managementBody.AddChild(network);
+        }
+        if (org.Kind == OrganizationKind.Faction)
+            _managementBody.AddChild(BuildFactionProgressPanel(org));
         if (org.InsolvencyState != OrganizationInsolvencyState.Active)
         {
             var administration = BuildTitledPanel("Фінансовий стан", out var administrationBody);
