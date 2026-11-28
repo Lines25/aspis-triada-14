@@ -3898,12 +3898,23 @@ public sealed partial class OrganizationSystem : EntitySystem
             TdfAlerts = tdfAccess
                 ? _tradeLedger.TakeLast(100).Select(t =>
                     new OrganizationTradeAlertEntry(t.Utc, t.Company, t.TraderName,
-                        $"{(t.Order == OrganizationStockOrder.ExternalInvestment ? "Зовнішній внесок" : $"{t.Order}: {t.Quantity} акцій")}, {t.Total:N0} $" +
-                        (t.Flagged ? $" — ПЕРЕВІРКА: {t.Reason}" : string.Empty), t.Flagged)
-                        { SourceKey = t.Flagged ? TdfTradeSourceKey(t) : string.Empty })
+                        TdfTradeDescription(t), t.Flagged)
+                        {
+                            SourceKey = t.Flagged ? TdfTradeSourceKey(t) : string.Empty,
+                            Operation = TdfTradeOperation(t),
+                            Reason = t.Reason,
+                            Counterparty = t.CounterpartyName,
+                            Amount = t.Total,
+                            Quantity = t.Quantity
+                        })
                     .Concat(_concentrationAlerts.TakeLast(100).Select(a =>
                         new OrganizationTradeAlertEntry(a.Utc, a.Company, "Секторна антимонопольна служба",
-                            a.Reason, true) { SourceKey = TdfConcentrationSourceKey(a) }))
+                            a.Reason, true)
+                        {
+                            SourceKey = TdfConcentrationSourceKey(a),
+                            Operation = "Концентрація ринку",
+                            Reason = a.Reason
+                        }))
                     .OrderByDescending(a => a.Utc).Take(100).ToArray()
                 : Array.Empty<OrganizationTradeAlertEntry>()
         };

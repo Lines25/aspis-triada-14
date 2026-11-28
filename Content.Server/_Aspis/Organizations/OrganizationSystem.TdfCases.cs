@@ -21,6 +21,28 @@ public sealed partial class OrganizationSystem
     private static string TdfSourceHash(string value) =>
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..32];
 
+    private static string TdfTradeOperation(OrganizationTradeRecord trade) => trade.Order switch
+    {
+        OrganizationStockOrder.Buy => "Купівля акцій",
+        OrganizationStockOrder.Sell when !string.IsNullOrWhiteSpace(trade.CounterpartyName) => "Біржова угода",
+        OrganizationStockOrder.Sell => "Продаж акцій",
+        OrganizationStockOrder.Issue => "Випуск акцій",
+        OrganizationStockOrder.ExternalInvestment => "Внесок до скарбниці",
+        _ => "Запис біржі"
+    };
+
+    private static string TdfTradeDescription(OrganizationTradeRecord trade)
+    {
+        var operation = TdfTradeOperation(trade);
+        var description = trade.Order switch
+        {
+            OrganizationStockOrder.ExternalInvestment => $"{operation}: {trade.Total:N0} $",
+            OrganizationStockOrder.Issue => $"{operation}: {trade.Quantity:N0} шт.",
+            _ => $"{operation}: {trade.Quantity:N0} шт., {trade.Total:N0} $"
+        };
+        return trade.Flagged ? $"{description}\n{trade.Reason}" : description;
+    }
+
     // A client-visible source key must not disclose the trader's private account ID.
     private static string TdfTradeSourceKey(OrganizationTradeRecord t) =>
         "T:" + TdfSourceHash($"{t.Organization:N}:{t.Utc.Ticks}:{t.TraderUserId}:{t.TraderSlot}:" +
@@ -132,7 +154,7 @@ public sealed partial class OrganizationSystem
             [
                 new OrganizationTdfCaseActionRecord
                 {
-                    Utc = now, Officer = officer, Description = "Відкрито перевірку за фінансовим сигналом."
+                    Utc = now, Officer = officer, Description = "Справу відкрито."
                 }
             ]
         };
@@ -143,7 +165,7 @@ public sealed partial class OrganizationSystem
         }
         _adminLog.Add(LogType.Action, LogImpact.Medium,
             $"TDF case OPEN id={docket.Id} source={docket.SourceKey} org={organization} officer={officer}");
-        Refresh(uid, args.Actor, "Фінансову перевірку відкрито.");
+        Refresh(uid, args.Actor, "Справу відкрито. Матеріали доступні у вкладці нагляду.");
     }
 
     private void OnTdfResolveCase(EntityUid uid, OrganizationConsoleComponent comp, OrganizationTdfResolveCaseMessage args)
@@ -175,8 +197,8 @@ public sealed partial class OrganizationSystem
                     Utc = now,
                     Officer = officer,
                     Description = (args.Status == OrganizationTdfCaseStatus.Cleared
-                        ? "Справу закрито без підтвердження порушення: "
-                        : "Справу направлено на подальший розгляд: ") + note
+                        ? "Порушення не встановлено: "
+                        : "Передано на розгляд: ") + note
                 });
                 if (docket.History.Count > MaxTdfCaseActions)
                     docket.History.RemoveAt(0);

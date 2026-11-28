@@ -325,6 +325,11 @@ public sealed class OrganizationTradeAlertEntry(DateTime utc, string company, st
     public bool Flagged = flagged;
     // Stable server-supplied key for flagged evidence only; never trust it as an authorization token.
     public string SourceKey = string.Empty;
+    public string Operation = string.Empty;
+    public string Reason = string.Empty;
+    public string Counterparty = string.Empty;
+    public long Amount;
+    public int Quantity;
 }
 
 [Serializable, NetSerializable]

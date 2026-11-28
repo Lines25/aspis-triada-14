@@ -100,6 +100,7 @@ public sealed partial class OrganizationSystem
         }
         _adminLog.Add(LogType.Action, LogImpact.Medium,
             $"External investment: {key.UserId} {org.Id} {args.Amount}");
+        _audio.PlayEntity(MoneyConfirmSound, actor, uid);
         Refresh(uid, actor, $"До скарбниці переказано {args.Amount:N0} $.");
     }
 

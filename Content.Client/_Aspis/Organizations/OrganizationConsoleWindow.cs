@@ -15,7 +15,7 @@ using static Robust.Client.UserInterface.Controls.BoxContainer;
 
 namespace Content.Client._Aspis.Organizations;
 
-public sealed class OrganizationConsoleWindow : DefaultWindow
+public sealed partial class OrganizationConsoleWindow : DefaultWindow
 {
     public event Action<string, OrganizationKind, OrganizationIndustry, bool, int, string, int, int, int, int, int>? CreateRequested;
     public event Action<Guid>? JoinRequested;
@@ -595,10 +595,10 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
 
     private Control BuildTdfView()
     {
-        var panel = BuildTitledPanel("TDF: Ринковий нагляд", out var content, true);
-        var scroll = new ScrollContainer { HScrollEnabled = false, HorizontalExpand = true, VerticalExpand = true };
-        scroll.AddChild(_tdfBody);
-        content.AddChild(scroll);
+        var panel = BuildTitledPanel("TDF / Фінансовий нагляд", out var content, true);
+        _tdfBody.HorizontalExpand = true;
+        _tdfBody.VerticalExpand = true;
+        content.AddChild(_tdfBody);
         return panel;
     }
 
@@ -1841,6 +1841,8 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         if (changedIdentity)
             _outpostLocalNotice = string.Empty;
         _tabButtons[ConsoleTab.Tdf].Visible = state.TdfAuthorized;
+        if (!state.TdfAuthorized)
+            ResetTdfReviewSelection();
         _tabButtons[ConsoleTab.Creation].Visible = state.Membership == null;
         _tabButtons[ConsoleTab.Services].Visible = state.Membership != null;
         if (_activeTab == ConsoleTab.Creation && state.Membership != null)
@@ -1855,6 +1857,7 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
         _previousViewedBody = state.ViewedBody;
         if (changedIdentity)
         {
+            ResetTdfReviewSelection();
             _leaveConfirmation = false;
             _outpostPurchaseConfirm = false;
             _outpostReplaceConfirm = false;
@@ -4613,95 +4616,6 @@ public sealed class OrganizationConsoleWindow : DefaultWindow
             AddMetric(holders, holder.Name, $"{holder.Shares:N0}: {percent:0.0}%");
         }
         _sharesBody.AddChild(shareholders);
-    }
-
-    private void RefreshTdf()
-    {
-        Clear(_tdfBody);
-        if (_state == null || !_state.TdfAuthorized)
-        {
-            _tdfBody.AddChild(new Label { Text = "Ринковий нагляд доступний тільки уповноваженим службовцям TDF на службовому терміналі." });
-            return;
-        }
-
-        _tdfBody.AddChild(new Label
-        {
-            Text = WrapText("Позначка біржової системи не доводить провину. Тут фіксується розгляд фінансових сигналів. " +
-                "Направлення справи не оголошує персонажа в розшук й не блокує його рахунки."),
-            FontColorOverride = Color.FromHex("#B6C6CF")
-        });
-        var active = BuildFoldout("Справи ринкового нагляду", out var caseBody, true);
-        _tdfBody.AddChild(active);
-        if (_state.TdfCases.Length == 0)
-            caseBody.AddChild(new Label { Text = "Справ поки немає." });
-
-        foreach (var docket in _state.TdfCases)
-        {
-            var status = docket.Status switch
-            {
-                OrganizationTdfCaseStatus.Open => "Відкрита",
-                OrganizationTdfCaseStatus.Cleared => "Закрита: порушення не підтверджено",
-                _ => "Передана на розгляд"
-            };
-            var foldout = BuildFoldout(status + ": " + docket.Company, out var details);
-            AddMetric(details, "Відкрито", docket.CreatedUtc.ToString("yyyy-MM-dd HH:mm") + " UTC");
-            AddMetric(details, "Учасник / джерело", docket.Subject);
-            details.AddChild(new Label { Text = WrapText(docket.Reason, 54) });
-            if (!string.IsNullOrWhiteSpace(docket.LastOfficer))
-                AddMetric(details, "Останнє рішення ухвалив", docket.LastOfficer);
-            if (!string.IsNullOrWhiteSpace(docket.DecisionNote))
-                details.AddChild(new Label { Text = WrapText(docket.DecisionNote, 54) });
-            if (docket.History.Length > 0)
-            {
-                var historyPanel = BuildFoldout("Історія рішень", out var historyBody);
-                foreach (var historyLine in docket.History)
-                    historyBody.AddChild(new Label { Text = WrapText(historyLine, 54) });
-                details.AddChild(historyPanel);
-            }
-
-            if (_state.TdfCanResolveCases && docket.Status == OrganizationTdfCaseStatus.Open)
-            {
-                var note = new LineEdit { PlaceHolder = "Обґрунтування рішення (5–220 символів)", HorizontalExpand = true };
-                details.AddChild(note);
-                var actions = new BoxContainer { Orientation = LayoutOrientation.Horizontal, HorizontalExpand = true, SeparationOverride = 5 };
-                var clear = new Button { Text = "Закрити без порушення", HorizontalExpand = true,
-                    ToolTip = "Зняти підозру за підсумками перевірки" };
-                var refer = new Button { Text = "Передати на розгляд", HorizontalExpand = true,
-                    ToolTip = "Документально направити матеріали, не накладаючи покарання" };
-                clear.OnPressed += _ => TdfResolveCaseRequested?.Invoke(docket.Id, OrganizationTdfCaseStatus.Cleared, note.Text.Trim());
-                refer.OnPressed += _ => TdfResolveCaseRequested?.Invoke(docket.Id, OrganizationTdfCaseStatus.Referred, note.Text.Trim());
-                actions.AddChild(clear);
-                actions.AddChild(refer);
-                details.AddChild(actions);
-            }
-            caseBody.AddChild(foldout);
-        }
-
-        var ledger = BuildFoldout("Сигнали й біржові угоди", out var ledgerBody, true);
-        _tdfBody.AddChild(ledger);
-        foreach (var alert in _state.TdfAlerts)
-        {
-            var entry = BuildFoldout((alert.Flagged ? "⚠ Сигнал" : "Угода") + ": " + alert.Company, out var body);
-            AddMetric(body, "Дата UTC", alert.Utc.ToString("yyyy-MM-dd HH:mm"));
-            AddMetric(body, "Учасник", alert.Actor);
-            body.AddChild(new Label { Text = WrapText(alert.Description, 54) });
-            if (alert.Flagged && !string.IsNullOrEmpty(alert.SourceKey))
-            {
-                var exists = _state.TdfCases.Any(c => c.Id != Guid.Empty &&
-                    c.SourceKey == alert.SourceKey);
-                // Duplicate case prevention is enforced by the server, including older evidence.
-                if (!exists)
-                {
-                    var open = new Button { Text = "Відкрити перевірку", MinHeight = 30 };
-                    open.OnPressed += _ => TdfOpenCaseRequested?.Invoke(alert.SourceKey);
-                    body.AddChild(open);
-                }
-                else body.AddChild(new Label { Text = "Перевірку вже зареєстровано." });
-            }
-            ledgerBody.AddChild(entry);
-        }
-        if (_state.TdfAlerts.Length == 0)
-            ledgerBody.AddChild(new Label { Text = "Операцій ще немає." });
     }
 
     private void RefreshSideBudget()
